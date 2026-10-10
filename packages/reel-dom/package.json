@@ -3,16 +3,43 @@
   "version": "1.0.0",
   "description": "The Reel player for browsers: plays reel/1 documents on a letterboxed 16:9 canvas, as a function or as the <reel-player> custom element, full screen included. No dependencies besides reel-format.",
   "license": "MIT",
+  "author": "davidtoska",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidtoska/reel.git",
+    "directory": "packages/reel-dom"
+  },
+  "homepage": "https://github.com/davidtoska/reel/tree/main/packages/reel-dom#readme",
+  "bugs": {
+    "url": "https://github.com/davidtoska/reel/issues"
+  },
   "type": "module",
   "sideEffects": false,
-  "keywords": ["reel", "slideshow", "player", "web-component", "custom-element", "fullscreen", "tv", "signage"],
+  "keywords": [
+    "reel",
+    "slideshow",
+    "player",
+    "web-component",
+    "custom-element",
+    "fullscreen",
+    "tv",
+    "signage"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "src", "LICENSE", "README.md"],
+  "files": [
+    "dist",
+    "src",
+    "LICENSE",
+    "README.md"
+  ],
   "dependencies": {
     "reel-format": "^1.0.0"
   },

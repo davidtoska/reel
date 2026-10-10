@@ -171,7 +171,7 @@ else console.log(pkg.errors);                      // e.g. 'media/fox.png: not i
 All demo images and sounds are generated and mean nothing.
 
 ```bash
-git clone <this repo> reel && cd reel
+git clone https://github.com/davidtoska/reel.git && cd reel
 npm install
 npm run build
 npm run dev          # http://localhost:8080
