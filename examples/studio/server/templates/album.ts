@@ -2,7 +2,7 @@
 // Title slide, slow zoom/pan and timing are chosen automatically.
 
 import type { Layer, MediaSrc, Motion, Reel, Slide } from 'reel-format';
-import { type CommonFields, type Sound, Errors, clip, flat, r1, reelHead, resolveTheme } from './common.ts';
+import { type CommonFields, type Sound, collectErrors, clip, flat, r1, reelHead, resolveTheme } from './common.ts';
 
 export const ALBUM = 'reel-album/1';
 
@@ -55,7 +55,7 @@ const movement = (i: number, f = { x: 50, y: 50 }): Motion => {
 };
 
 export const validateAlbum = (doc: AlbumDocument): string[] => {
-  const e = new Errors();
+  const e = collectErrors();
   e.common(doc);
   e.text(doc.subtitle, 200, 'subtitle');
   e.range(doc.secondsPerPhoto, 3, 60, 'secondsPerPhoto');

@@ -2,7 +2,7 @@
 // highlighted, and a short fact can be shown.
 
 import type { Layer, MediaSrc, Reel, Slide } from 'reel-format';
-import { type CommonFields, type Sound, Errors, alpha, clip, flat, r1, reelHead, resolveTheme } from './common.ts';
+import { type CommonFields, type Sound, collectErrors, alpha, clip, flat, r1, reelHead, resolveTheme } from './common.ts';
 
 export const QUIZ = 'reel-quiz/1';
 
@@ -40,7 +40,7 @@ export interface QuizQuestion {
 const LETTERS = ['A', 'B', 'C', 'D'];
 
 export const validateQuiz = (doc: QuizDocument): string[] => {
-  const e = new Errors();
+  const e = collectErrors();
   e.common(doc);
   e.text(doc.intro, 160, 'intro');
   e.text(doc.closing, 80, 'closing');

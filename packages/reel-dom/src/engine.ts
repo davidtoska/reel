@@ -1,5 +1,6 @@
-// The Reel player: draws a resolved reel on a 16:9 canvas with layers – image, video, text and
-// shape – placed in percent of the canvas, and plays its audio clips and music.
+// The playback engine behind ReelPlayer (internal): draws a resolved reel on a 16:9 canvas with
+// layers – image, video, text and shape – placed in percent of the canvas, and plays its audio clips
+// and music.
 //
 // Visibility, fades and zoom are Web Animations over the whole length of a slide, so pause, resume
 // and starting in the middle of a slide are only a matter of setting or freezing `currentTime`.
@@ -9,12 +10,10 @@
 //
 // Behaviour is part of Reel 1.0 and is frozen together with the format.
 
+import { slideStarts, type AudioClip, type Layer, type LayerBase, type Motion, type MotionPoint, type ResolvedReel, type Slide, type VideoLayer } from 'reel-format';
 import { h } from './dom.ts';
-import { slideStarts } from './resolve.ts';
 import { PLAYER_CSS } from './styles.ts';
-import type {
-  AudioClip, Layer, LayerBase, Motion, MotionPoint, ReelPlayerError, ResolvedReel, Slide, SlideShown, VideoLayer,
-} from './format.ts';
+
 
 /** s – audio clips that started more than this before a mid-slide start are skipped (no speech mid-sentence). */
 const JOIN_TOLERANCE = 0.25;
@@ -57,6 +56,27 @@ export const motionKeyframes = (motion: Motion, layer: LayerBase, D: number): Ke
   return [{ offset: 0, ...from }, { offset: s / D, ...from }, { offset: e / D, ...to }, { offset: 1, ...to }];
 };
 
+// --- Events --------------------------------------------------------------------------------------
+
+export interface ReelPlayerError {
+  kind: 'media-missing';
+  /** The file that could not be loaded. Reported once per file per play. */
+  src: string;
+  slideId?: string;
+  /** Always false: the reel keeps playing without the file. */
+  fatal: false;
+}
+
+/** Reported once per slide, when it has been shown to the end. */
+export interface SlideShown {
+  slideId: string;
+  /** How long the slide was actually shown (less when playback started in the middle of it). */
+  seconds: number;
+  /** Whether any of the slide's audio clips started playing. */
+  audioPlayed: boolean;
+  reel: ResolvedReel | null;
+}
+
 // --- Internal state ------------------------------------------------------------------------------
 
 type ClipState = 'waiting' | 'playing' | 'done' | 'skipped' | 'error';
@@ -76,8 +96,8 @@ interface ShownSlide {
   paused: Animation[];
 }
 
-export interface ReelPlayerOptions {
-  /** The player takes over this element's content and fills it, letterboxed to 16:9. */
+export interface EngineOptions {
+  /** The engine takes over this element's content and fills it, letterboxed to 16:9. */
   element: HTMLElement;
   /** A media file could not be loaded. Playback continues without it. */
   onError?: (error: ReelPlayerError) => void;
@@ -89,7 +109,7 @@ export interface ReelPlayerOptions {
   onEnded?: (reel: ResolvedReel) => void;
 }
 
-export interface ReelPlayer {
+export interface Engine {
   /** Starts a reel `offset` seconds in. Replaces whatever was playing. */
   play: (reel: ResolvedReel, offset?: number) => void;
   /** Stops and clears the canvas. */
@@ -102,13 +122,16 @@ export interface ReelPlayer {
   position: () => number;
   readonly paused: boolean;
   readonly reel: ResolvedReel | null;
+  /** Stops and lets go of the element: removes its content and every listener and observer. */
+  destroy: () => void;
 }
 
-export const createReelPlayer = ({ element, onError = () => {}, onAudioBlocked = () => {}, onSlideShown = () => {}, onEnded = () => {} }: ReelPlayerOptions): ReelPlayer => {
+export const createEngine = ({ element, onError = () => {}, onAudioBlocked = () => {}, onSlideShown = () => {}, onEnded = () => {} }: EngineOptions): Engine => {
   const canvas = h('div', { class: 'reel-canvas' });
   const music = h('audio', { loop: true, preload: 'auto' });
-  element.classList.add('reel-stage');
-  element.replaceChildren(h('style', {}, PLAYER_CSS), canvas);
+  // The host keeps its own size and positioning; everything is drawn in a frame that fills it.
+  element.classList.add('reel-host');
+  element.replaceChildren(h('style', {}, PLAYER_CSS), h('div', { class: 'reel-stage' }, canvas));
 
   let reel: ResolvedReel | null = null;
   let starts: number[] = [];          // start position per slide
@@ -127,6 +150,7 @@ export const createReelPlayer = ({ element, onError = () => {}, onAudioBlocked =
   const mutedByBlock = new Set<Video>();  // video layers playing without sound because sound was refused
 
   const position = () => (paused ? basePos : basePos + (performance.now() - baseT) / 1000);
+  const reelEnd = () => (starts.length ? starts.at(-1)! + reel!.slides.at(-1)!.duration : 0);
   const indexAt = (p: number) => {
     let i = 0;
     while (i + 1 < starts.length && starts[i + 1] <= p) i++;
@@ -143,7 +167,8 @@ export const createReelPlayer = ({ element, onError = () => {}, onAudioBlocked =
     canvas.style.height = `${height}px`;
     canvas.style.setProperty('--reel-h', `${height}px`);
   };
-  if (window.ResizeObserver) new ResizeObserver(fit).observe(element);
+  const resizeObserver = window.ResizeObserver ? new ResizeObserver(fit) : null;
+  resizeObserver?.observe(element);
   window.addEventListener('resize', fit);
 
   // --- Errors and sound --------------------------------------------------------------------------
@@ -439,6 +464,15 @@ export const createReelPlayer = ({ element, onError = () => {}, onAudioBlocked =
     music.pause();
   };
 
+  const stop = () => {
+    tearDownAll();
+    reel = null;
+    paused = false;
+    music.removeAttribute('src');
+    music.load();
+    musicTarget = null;
+  };
+
   return {
     play: (next, offset = 0) => {
       tearDownAll();
@@ -455,14 +489,7 @@ export const createReelPlayer = ({ element, onError = () => {}, onAudioBlocked =
       startMusic(basePos);
       tick();
     },
-    stop: () => {
-      tearDownAll();
-      reel = null;
-      paused = false;
-      music.removeAttribute('src');
-      music.load();
-      musicTarget = null;
-    },
+    stop,
     pause: () => {
       if (paused) return;
       basePos = position();
@@ -507,7 +534,12 @@ export const createReelPlayer = ({ element, onError = () => {}, onAudioBlocked =
     position: () => (reel ? Math.min(position(), reelEnd()) : 0),
     get paused() { return paused; },
     get reel() { return reel; },
+    destroy: () => {
+      stop();
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', fit);
+      element.replaceChildren();
+      element.classList.remove('reel-host');
+    },
   };
-
-  function reelEnd() { return starts.length ? starts.at(-1)! + reel!.slides.at(-1)!.duration : 0; }
 };

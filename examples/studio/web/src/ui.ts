@@ -2,8 +2,7 @@
 
 export type Child = Node | string | number | null | undefined | false | Child[];
 
-export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs?: Record<string, unknown> | null, ...children: Child[]): HTMLElementTagNameMap[K];
-export function h(tag: string, attrs: Record<string, unknown> | null = {}, ...children: Child[]): HTMLElement {
+export const h = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, unknown> | null = {}, ...children: Child[]): HTMLElementTagNameMap[K] => {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs ?? {})) {
     if (value == null || value === false) continue;
@@ -18,7 +17,7 @@ export function h(tag: string, attrs: Record<string, unknown> | null = {}, ...ch
     node.append(child instanceof Node ? child : String(child));
   }
   return node;
-}
+};
 
 export const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 export const fmtBytes = (n: number) => (n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.ceil(n / 1e3)} kB`);

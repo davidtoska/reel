@@ -4,10 +4,8 @@
 // layers that can be dragged and resized. Right: properties of the reel, the slide, the selected
 // layer, audio clips and media. Saving sends the document to the same API scripts and AI agents use.
 
-import {
-  createReelPlayer, resolveReel, slideStarts, validateReel,
-  type AudioClip, type Layer, type Reel, type Slide,
-} from 'reel-format';
+import { ReelPlayer } from 'reel-dom';
+import { slideStarts, validateReel, type AudioClip, type Layer, type Reel } from 'reel-format';
 import { api, ApiError, type LibraryFile, type MediaInfo } from './api.ts';
 import { fields, fmtBytes, fmtTime, h, toast } from './ui.ts';
 
@@ -37,20 +35,20 @@ const saveBtn = h('button', { class: 'btn primary', type: 'button' }, 'Save');
 const status = h('span', { class: 'status' });
 const problems = h('ul', { class: 'problems' });
 const slideList = h('ol', { class: 'slides' });
-const stage = h('div', { class: 'editor-stage' });
+const stage = h('div', { class: 'editor-stage' });       // the player's host element
+const overlay = h('div', { class: 'overlay' });           // boxes over the layers, placed over the canvas
+const preview = h('div', { class: 'editor-preview' }, stage, overlay);
 const scrub = h('input', { type: 'range', min: 0, step: 0.1, class: 'scrub' });
 const timeLabel = h('span', { class: 'time' });
 const playBtn = h('button', { class: 'btn', type: 'button' }, '▶ Play from here');
+const fullBtn = h('button', { class: 'btn', type: 'button', title: 'Full screen preview (Esc to leave)' }, '⛶');
 const inspector = h('div', { class: 'inspector' });
 
-const player = createReelPlayer({
-  element: stage,
-  onEnded: () => stopPlaying(),
-  onError: e => toast(`Missing file: ${e.src}`, 'error'),
-});
-const canvas = stage.querySelector('.reel-canvas') as HTMLElement;
-const overlay = h('div', { class: 'overlay' });
-canvas.append(overlay);
+const player = new ReelPlayer(stage);
+player.on('ended', () => stopPlaying());
+player.on('error', e => toast(`Missing file: ${e.src}`, 'error'));
+/** The player's canvas inside the host (its class names are stable for overlays like this one). */
+const canvasEl = () => stage.querySelector<HTMLElement>('.reel-canvas');
 
 // --- Changes, validation, saving -------------------------------------------------------------------
 
@@ -124,10 +122,10 @@ const frame = () => {
   scrub.value = String(frameAt);
   timeLabel.textContent = `${frameAt.toFixed(1)} / ${s.duration} s`;
   try {
-    player.play(resolveReel(doc, { baseUrl: reelUrl }), slideStarts(doc.slides)[slideIndex] + frameAt);
-    player.pause();
+    player.loadReel(doc, reelUrl);
+    player.seek(slideStarts(doc.slides)[slideIndex] + frameAt);
   } catch {
-    // An unfinished edit (e.g. an empty duration) can make a slide impossible to draw. The problem list says why.
+    // The player only shows valid reels; while an edit is unfinished the problem list says what is wrong.
   }
   requestAnimationFrame(drawOverlay);
 };
@@ -135,10 +133,15 @@ const frame = () => {
 const drawOverlay = () => {
   overlay.replaceChildren();
   const s = slide();
+  const canvas = canvasEl();
+  if (!s || !canvas || playing || !player.reel) return;
   const shown = canvas.querySelectorAll<HTMLElement>('.reel-slide');
   const rendered = shown[shown.length - 1]?.querySelectorAll<HTMLElement>(':scope > .reel-layer') ?? [];
   const c = canvas.getBoundingClientRect();
-  if (!s || !c.width || playing) return;
+  const p = preview.getBoundingClientRect();
+  if (!c.width) return;
+  // The overlay covers exactly the canvas; boxes inside it are in percent, like the layers.
+  Object.assign(overlay.style, { left: `${c.left - p.left}px`, top: `${c.top - p.top}px`, width: `${c.width}px`, height: `${c.height}px` });
   s.layers.forEach((l, i) => {
     const r = rendered[i]?.getBoundingClientRect();
     if (!r) return;
@@ -158,7 +161,7 @@ const startDrag = (e: PointerEvent, i: number, box: HTMLElement, el: HTMLElement
   e.preventDefault();
   if (layerIndex !== i) { layerIndex = i; render(); return; }
   const l = slide().layers[i];
-  const c = canvas.getBoundingClientRect();
+  const c = overlay.getBoundingClientRect();
   const start = { px: e.clientX, py: e.clientY, x: l.x ?? 0, y: l.y ?? 0, w: l.w ?? 100, h: l.h ?? (box.offsetHeight / c.height) * 100 };
   const hasH = l.h != null || l.type !== 'text';
   box.setPointerCapture(e.pointerId);
@@ -193,21 +196,23 @@ let clock = 0;
 const stopPlaying = () => {
   playing = false;
   cancelAnimationFrame(clock);
+  player.pause();
   playBtn.textContent = '▶ Play from here';
-  stage.classList.remove('playing');
+  preview.classList.remove('playing');
   frame();
 };
 playBtn.addEventListener('click', () => {
   if (playing) return stopPlaying();
+  if (!player.reel) return toast('Fix the problems first – the player only plays valid reels', 'error');
   playing = true;
   overlay.replaceChildren();
-  stage.classList.add('playing');
+  preview.classList.add('playing');
   playBtn.textContent = '■ Stop';
   const starts = slideStarts(doc.slides);
-  player.play(resolveReel(doc, { baseUrl: reelUrl }), starts[slideIndex] + frameAt);
+  player.play(); // the frame shown is already at the right place
   // Follow playback in the slide list and the time slider.
   const follow = () => {
-    const p = player.position();
+    const p = player.currentTime;
     let i = 0;
     while (i + 1 < starts.length && starts[i + 1] <= p) i++;
     if (i !== slideIndex) { slideIndex = i; layerIndex = -1; drawSlides(); drawInspector(); }
@@ -220,6 +225,9 @@ playBtn.addEventListener('click', () => {
   follow();
 });
 document.addEventListener('pointerdown', () => player.unlockAudio());
+// Full screen shows only the host element – the overlay stays behind.
+fullBtn.addEventListener('click', () => player.toggleFullscreen().catch(err => toast(`Full screen not allowed: ${err.message}`, 'error')));
+document.addEventListener('fullscreenchange', () => requestAnimationFrame(drawOverlay));
 
 // --- Slides --------------------------------------------------------------------------------------
 
@@ -552,7 +560,7 @@ document.getElementById('app')!.append(
       saveBtn)),
   h('div', { class: 'editor' },
     h('aside', { class: 'left' }, h('h3', {}, 'Slides'), slideList, slideActions()),
-    h('main', { class: 'centre' }, stage, h('div', { class: 'row' }, playBtn, scrub, timeLabel), problems),
+    h('main', { class: 'centre' }, preview, h('div', { class: 'row' }, playBtn, fullBtn, scrub, timeLabel), problems),
     h('aside', { class: 'right' }, inspector)),
 );
 

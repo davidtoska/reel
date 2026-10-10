@@ -6,7 +6,9 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
-    "reel-format": "*"
+    "reel-dom": "*",
+    "reel-format": "*",
+    "reel-schema": "*"
   },
   "scripts": {
     "build": "tsc -p web/tsconfig.json",

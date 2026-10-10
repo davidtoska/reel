@@ -1,22 +1,23 @@
 {
   "name": "reel-format",
   "version": "1.0.0",
-  "description": "Reel: a frozen JSON format and a dependency-free web player for timed, layered slideshows (images, video, text, shapes, narration and music) on a 16:9 canvas.",
+  "description": "Reel 1.0 for Node and browsers: TypeScript types, validation and resolving for reel/1 documents, and reading/writing .zip reel packages. No DOM, no dependencies.",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
-  "keywords": ["reel", "slideshow", "player", "presentation", "tv", "signage", "web-component", "format"],
+  "keywords": ["reel", "slideshow", "format", "validation", "zip", "package"],
+  "engines": { "node": ">=18" },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-    "./schema.json": "./schema/reel-1.schema.json",
     "./package.json": "./package.json"
   },
-  "files": ["dist", "src", "schema", "LICENSE"],
+  "files": ["dist", "src", "LICENSE", "README.md"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.ts",
     "prepublishOnly": "npm run build"
   }
 }

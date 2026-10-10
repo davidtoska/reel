@@ -2,7 +2,7 @@
 // Items are spread over pages of at most five and appear one by one.
 
 import type { Layer, MediaSrc, Reel, Slide } from 'reel-format';
-import { type CommonFields, type Sound, Errors, alpha, chunk, clip, flat, r1, reelHead, resolveTheme } from './common.ts';
+import { type CommonFields, type Sound, collectErrors, alpha, chunk, clip, flat, r1, reelHead, resolveTheme } from './common.ts';
 
 export const DAYPLAN = 'reel-dayplan/1';
 
@@ -49,7 +49,7 @@ export interface DayPlanNote {
 const PER_PAGE = 5;
 
 export const validateDayPlan = (doc: DayPlanDocument): string[] => {
-  const e = new Errors();
+  const e = collectErrors();
   e.common(doc);
   e.text(doc.greeting, 60, 'greeting', true);
   e.text(doc.date, 80, 'date');

@@ -6,8 +6,8 @@
 
 import { randomBytes } from 'node:crypto';
 import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
-import { REEL_MANIFEST, REEL_MEDIA_DIR, REEL_MEDIA_TYPES, extensionOf, reelDuration, type Reel } from 'reel-format';
+import { basename, join, sep } from 'node:path';
+import { REEL_MANIFEST, REEL_MEDIA_DIR, REEL_MEDIA_TYPES, checkPackageFiles, extensionOf, reelDuration, reelMediaRefs, writeReelPackage, type Reel } from 'reel-format';
 import { HttpError } from './http.ts';
 
 export const STUDIO_DIR = new URL('..', import.meta.url).pathname;
@@ -138,9 +138,10 @@ export const deleteAllReels = () => rm(DATA_DIR, { recursive: true, force: true 
 
 // --- Media ---------------------------------------------------------------------------------------
 
+/** Files under media/, including sub-folders (packages may use them). Names are relative to media/. */
 export const listMedia = async (id: string): Promise<MediaInfo[]> => {
-  const names = await readdir(mediaDir(id)).catch(() => [] as string[]);
-  return Promise.all(names.filter(n => KIND_BY_EXT.has(extensionOf(n))).sort().map(n => mediaInfo(join(mediaDir(id), n), n)));
+  const names = await readdir(mediaDir(id), { recursive: true }).catch(() => [] as string[]);
+  return Promise.all(names.map(n => n.split(sep).join('/')).filter(n => KIND_BY_EXT.has(extensionOf(n))).sort().map(n => mediaInfo(join(mediaDir(id), n), n)));
 };
 
 const checkSpace = async (id: string, adding: number, replacing: string) => {
@@ -174,32 +175,32 @@ export const deleteMedia = async (id: string, fileName: string) => {
   await rm(path);
 };
 
-/** All media/… references in a reel. */
-export const mediaRefs = (reel: Reel): string[] => {
-  const refs = new Set<string>();
-  if (reel.music) refs.add(reel.music.src);
-  for (const s of reel.slides) {
-    for (const l of s.layers) if (l.type === 'image' || l.type === 'video') refs.add(l.src);
-    for (const a of s.audio ?? []) refs.add(a.src);
-  }
-  return [...refs].filter(r => r.startsWith(REEL_MEDIA_DIR));
-};
+/** Errors for references to files the package does not have (the same check readReelPackage does). */
+export const missingMedia = async (id: string, reel: Reel): Promise<string[]> =>
+  checkPackageFiles(reel, (await listMedia(id)).map(m => m.src)).errors.map(e => `${e} – upload it or import it from the library first`);
 
-/** Errors for references to files the package does not have. */
-export const missingMedia = async (id: string, reel: Reel): Promise<string[]> => {
-  const have = new Set((await listMedia(id)).map(m => m.src));
-  return mediaRefs(reel).filter(r => !have.has(r)).map(r => `${r}: no such file in the package – upload it or import it from the library first`);
-};
-
-/** The package as [path, content] pairs: reel.json and the media files it uses. */
-export const packageFiles = async (id: string): Promise<[string, Buffer][]> => {
+/** The reel as a package zip: reel.json and the media files it uses. */
+export const packageZip = async (id: string): Promise<Uint8Array> => {
   const { reel } = await getReel(id);
-  const files: [string, Buffer][] = [[REEL_MANIFEST, Buffer.from(JSON.stringify(reel, null, 2))]];
-  for (const ref of mediaRefs(reel)) {
+  const files = new Map<string, Uint8Array>();
+  for (const ref of reelMediaRefs(reel)) {
     const data = await readFile(join(dir(id), ref)).catch(() => null);
-    if (data) files.push([ref, data]);
+    if (data) files.set(ref, data);
   }
-  return files;
+  return writeReelPackage(reel, files);
+};
+
+/** Stores a package's files (from readReelPackage) in a new reel. */
+export const putPackageFiles = async (id: string, files: Map<string, Uint8Array>) => {
+  const total = [...files.values()].reduce((s, f) => s + f.length, 0);
+  if (total > MAX_REEL_BYTES) throw new HttpError(413, `The package has ${Math.round(total / 1e6)} MB of media – the limit is ${MAX_REEL_BYTES / 1e6} MB`);
+  await mkdir(mediaDir(id), { recursive: true });
+  for (const [path, data] of files) {
+    if (!path.startsWith(REEL_MEDIA_DIR)) continue;
+    const target = join(dir(id), path);
+    await mkdir(join(target, '..'), { recursive: true });
+    await writeFile(target, data);
+  }
 };
 
 // --- Library --------------------------------------------------------------------------------------

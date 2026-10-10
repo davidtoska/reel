@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unpkg.com/reel-format@1/schema/reel-1.schema.json",
+  "$id": "https://unpkg.com/reel-schema@1/reel-1.schema.json",
   "title": "Reel 1.0",
   "description": "A reel: slides with timed layers (image, video, text, shape), audio clips and music on a 16:9 canvas. Positions and sizes are percent of the canvas; times are seconds from the start of the slide. Rules that depend on other fields (times within the slide, unique slide ids) are checked by validateReel() in the reel-format package.",
   "type": "object",

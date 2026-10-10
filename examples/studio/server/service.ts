@@ -1,8 +1,8 @@
 // Creating and updating reels from documents: import library media, compile templates, validate, save.
 
-import { REEL_FORMAT } from 'reel-format';
+import { REEL_FORMAT, readReelPackage } from 'reel-format';
 import { HttpError } from './http.ts';
-import { deleteReel, importMedia, missingMedia, newId, reelExists, saveReel, checkId } from './store.ts';
+import { deleteReel, importMedia, missingMedia, newId, putPackageFiles, reelExists, saveReel, checkId, MAX_REEL_BYTES } from './store.ts';
 import { compile, type MediaImport } from './templates/index.ts';
 
 export interface Saved {
@@ -40,4 +40,20 @@ export const createReel = async (document: unknown, media?: MediaImport[], id?: 
 export const updateReel = async (id: string, document: unknown, media?: MediaImport[]): Promise<Saved> => {
   if (!(await reelExists(id))) throw new HttpError(404, `No reel with id ${id}`);
   return apply(id, document, media);
+};
+
+/** Creates a reel from a package zip (reel.json + media/), checked with readReelPackage from reel-format. */
+export const importPackage = async (zip: Uint8Array, id?: string): Promise<Saved & { warnings: string[] }> => {
+  const result = await readReelPackage(zip, { maxBytes: MAX_REEL_BYTES });
+  if (!result.ok) throw new HttpError(400, 'The package is not valid', { errors: result.errors, warnings: result.warnings });
+  const newIdValue = id ? checkId(id) : newId(result.reel.title);
+  if (await reelExists(newIdValue)) throw new HttpError(409, `A reel with id ${newIdValue} exists`);
+  try {
+    await putPackageFiles(newIdValue, result.files);
+    await saveReel(newIdValue, result.reel);
+  } catch (err) {
+    await deleteReel(newIdValue).catch(() => {});
+    throw err;
+  }
+  return { id: newIdValue, format: REEL_FORMAT, duration: result.reel.slides.reduce((s, x) => s + x.duration, 0), slides: result.reel.slides.length, warnings: result.warnings };
 };

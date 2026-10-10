@@ -1,0 +1,24 @@
+{
+  "name": "reel-dom",
+  "version": "1.0.0",
+  "description": "The Reel player for browsers: plays reel/1 documents on a letterboxed 16:9 canvas, as a function or as the <reel-player> custom element, full screen included. No dependencies besides reel-format.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "keywords": ["reel", "slideshow", "player", "web-component", "custom-element", "fullscreen", "tv", "signage"],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "src", "LICENSE", "README.md"],
+  "dependencies": {
+    "reel-format": "^1.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepublishOnly": "npm run build"
+  }
+}

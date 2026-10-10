@@ -1,17 +1,15 @@
-// reel-format – Reel 1.0: the format, its validation and the player.
+// reel-format – Reel 1.0 without the DOM: the format's types, validation, resolving and packages.
+// Runs in Node and in browsers. The player is in reel-dom; the JSON Schema is in reel-schema.
 //
-//   import { validateReel, resolveReel, createReelPlayer } from 'reel-format';
+//   import { validateReel, resolveReel, readReelPackage } from 'reel-format';
 //
-//   const res = await fetch(url);
-//   const checked = validateReel(await res.json());
-//   if (!checked.ok) throw new Error(checked.errors.join('\n'));
-//   const player = createReelPlayer({ element: document.querySelector('#screen')! });
-//   player.play(resolveReel(checked.reel, { baseUrl: res.url }));
-//
-// or, with the custom element: defineReelPlayerElement() and <reel-player src="…/reel.json" autoplay>.
+//   const checked = validateReel(JSON.parse(text));
+//   if (!checked.ok) console.error(checked.errors);   // ["slides[1].duration: must be 1–600", …]
 
 export * from './format.ts';
 export { validateReel, checkMediaSrc, extensionOf, type ValidationResult } from './validate.ts';
 export { resolveReel, reelDuration, slideStarts, type ResolveOptions } from './resolve.ts';
-export { createReelPlayer, visibilityKeyframes, motionKeyframes, type ReelPlayer, type ReelPlayerOptions } from './player.ts';
-export { defineReelPlayerElement, type ReelPlayerElement } from './element.ts';
+export {
+  readReelPackage, writeReelPackage, checkPackageFiles, reelMediaRefs, isSystemFile, crc32,
+  REEL_PACKAGE_DEFAULTS, type ReelPackageResult,
+} from './package.ts';

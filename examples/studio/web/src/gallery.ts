@@ -41,12 +41,28 @@ const draw = async () => {
   if (!reels.length) grid.append(h('p', { class: 'muted' }, 'No reels yet. Create one, or restore the demo data.'));
 };
 
+/** Uploads a package zip (reel.json + media/), e.g. one downloaded with "Package". */
+const importButton = () => {
+  const input = h('input', { type: 'file', accept: '.zip,application/zip' });
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const r = await api.importPackage(file);
+      if (r.warnings.length) toast(r.warnings.join(' · '));
+      open(r.id);
+    } catch (err) { fail(err); }
+  });
+  return h('label', { class: 'btn', title: 'A .zip with reel.json and media/' }, 'Import package…', input);
+};
+
 const drawTemplates = async () => {
   const list = await api.templates();
   templates.replaceChildren(
     h('button', { class: 'btn primary', type: 'button', onclick: () => api.create(EMPTY).then(r => open(r.id), fail) }, '+ Empty reel'),
     ...list.map(t => h('button', { class: 'btn', type: 'button', title: `${t.description}\nFormat: ${t.format}`,
       onclick: () => api.create(t.example.document, t.example.media).then(r => open(r.id), fail) }, `+ ${t.label}`)),
+    importButton(),
     h('button', { class: 'btn ghost', type: 'button', onclick: async () => {
       if (!confirm('Delete every reel and restore the demo data?')) return;
       await api.reset().catch(fail);
@@ -64,7 +80,7 @@ document.getElementById('app')!.append(
       h('a', { href: 'https://www.npmjs.com/package/reel-format' }, 'npm'))),
   h('main', { class: 'page' },
     h('p', { class: 'lead' },
-      'An example app for ', h('code', {}, 'reel-format'), '. People build reels here with the visual editor; scripts and AI agents use the same open ',
+      'An example app for ', h('code', {}, 'reel-format'), ' and ', h('code', {}, 'reel-dom'), '. People build reels here with the visual editor; scripts and AI agents use the same open ',
       h('a', { href: '/api' }, 'API'), '. Every reel is a package (', h('code', {}, 'reel.json'), ' + ', h('code', {}, 'media/'),
       ') published at ', h('code', {}, '/reels/<id>/'), '. Everything here is open demo data and may be reset.'),
     h('section', {}, h('h2', {}, 'New reel'), templates),

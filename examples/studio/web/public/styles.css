@@ -62,7 +62,7 @@ header.top nav { display: flex; gap: 14px; margin-left: auto; }
 /* --- Player page -------------------------------------------------------------------------------- */
 
 body.page-play { background: #000; overflow: hidden; }
-reel-player.fullscreen { position: fixed; inset: 0; width: 100vw; height: 100vh; aspect-ratio: auto; }
+.screen { position: fixed; inset: 0; }
 .hint { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.75); color: #fff; padding: 8px 16px; border-radius: 99px; z-index: 2; }
 .errors { position: fixed; inset: auto 20px 20px; background: #2a0f0f; color: #ffd9d6; border: 1px solid #b42318; border-radius: 8px; padding: 12px 16px; z-index: 2; max-height: 60vh; overflow: auto; }
 .back { position: fixed; top: 12px; left: 12px; color: #fff; background: rgba(0,0,0,.5); padding: 6px 12px; border-radius: 8px; text-decoration: none; z-index: 2; transition: opacity .3s; }
@@ -103,8 +103,9 @@ body.page-edit #app { height: 100vh; display: flex; flex-direction: column; }
 .slide-name, .layer-name, .media-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--bg); color: var(--muted); }
 
-.editor-stage { width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; flex: none; }
-.overlay { position: absolute; inset: 0; z-index: 10; }
+.editor-preview { position: relative; width: 100%; aspect-ratio: 16 / 9; flex: none; }
+.editor-stage { position: absolute; inset: 0; border-radius: 8px; }
+.overlay { position: absolute; z-index: 10; }
 .box { position: absolute; border: 1px dashed rgba(255,255,255,.55); outline: 1px dashed rgba(0,0,0,.45); cursor: move; touch-action: none; }
 .box:hover { border-color: #fff; }
 .box.selected { border: 2px solid #2bb3a3; outline: none; }
@@ -112,7 +113,7 @@ body.page-edit #app { height: 100vh; display: flex; flex-direction: column; }
 .box-tag { position: absolute; left: -1px; top: -18px; font: 11px var(--font); background: rgba(0,0,0,.65); color: #fff; padding: 0 5px; border-radius: 3px; pointer-events: none; }
 .box .handle { position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; background: #2bb3a3; border: 2px solid #fff; border-radius: 2px; cursor: nwse-resize; display: none; }
 .box.selected .handle { display: block; }
-.editor-stage.playing .overlay { display: none; }
+.editor-preview.playing .overlay { display: none; }
 .scrub { flex: 1; }
 .time { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 90px; text-align: right; }
 .problems { margin: 0; padding-left: 18px; color: var(--danger); font-size: 13px; }
@@ -146,3 +147,5 @@ body.page-edit #app { height: 100vh; display: flex; flex-direction: column; }
 .toasts { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 100; }
 .toast { background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13.5px; box-shadow: 0 4px 16px rgba(0,0,0,.2); }
 .toast.error { background: var(--danger); color: #fff; }
+
+.btn input[type=file] { display: none; }

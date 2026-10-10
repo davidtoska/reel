@@ -32,6 +32,7 @@ export const api = {
   reels: () => call<ReelSummary[]>('GET', '/api/reels'),
   reel: (id: string) => call<ReelDetails>('GET', `/api/reels/${id}`),
   create: (document: unknown, media?: Template['example']['media']) => call<{ id: string; urls: ReelUrls }>('POST', '/api/reels', { document, media }),
+  importPackage: (zip: File) => call<{ id: string; warnings: string[]; urls: ReelUrls }>('POST', '/api/reels/import', zip, true),
   save: (id: string, document: Reel) => call<{ id: string }>('PUT', `/api/reels/${id}`, { document }),
   remove: (id: string) => call('DELETE', `/api/reels/${id}`),
   templates: () => call<Template[]>('GET', '/api/templates'),

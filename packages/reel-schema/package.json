@@ -1,0 +1,14 @@
+{
+  "name": "reel-schema",
+  "version": "1.0.0",
+  "description": "JSON Schema (draft 2020-12) for Reel 1.0 (reel/1) documents, and the specification of the .zip reel package. Language-neutral: generate validators in Go, Python, Rust …",
+  "license": "MIT",
+  "keywords": ["reel", "json-schema", "schema", "slideshow", "format"],
+  "main": "./reel-1.schema.json",
+  "exports": {
+    ".": "./reel-1.schema.json",
+    "./reel-1.schema.json": "./reel-1.schema.json",
+    "./package.json": "./package.json"
+  },
+  "files": ["reel-1.schema.json", "LICENSE", "README.md"]
+}

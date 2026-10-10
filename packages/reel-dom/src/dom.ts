@@ -4,8 +4,7 @@ export type Child = Node | string | number | null | undefined | false | Child[];
 export type Attrs = Record<string, unknown> | null;
 
 /** Creates an element. Properties are set when the element has them, attributes otherwise. */
-export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs?: Attrs, ...children: Child[]): HTMLElementTagNameMap[K];
-export function h(tag: string, attrs: Attrs = {}, ...children: Child[]): HTMLElement {
+export const h = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs = {}, ...children: Child[]): HTMLElementTagNameMap[K] => {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs ?? {})) {
     if (value == null || value === false) continue;
@@ -18,4 +17,4 @@ export function h(tag: string, attrs: Attrs = {}, ...children: Child[]): HTMLEle
     node.append(child instanceof Node ? child : String(child));
   }
   return node;
-}
+};

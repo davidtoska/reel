@@ -15,7 +15,7 @@
  *  - times             seconds from the start of the slide, decimals allowed
  *  - volume, opacity   0–1
  *
- * Package (a reel with its files, as a folder or a zip with the same content):
+ * Package (a reel with its files, as a folder or a zip with the same content – see package.ts):
  *
  *     my-reel/
  *     ├── reel.json      the document (this format)
@@ -251,25 +251,4 @@ export interface ResolvedReel {
   duration: number;
   music?: Music;
   slides: Slide[];
-}
-
-// --- Events from the player ------------------------------------------------------------------
-
-export interface ReelPlayerError {
-  kind: 'media-missing';
-  /** The file that could not be loaded. Reported once per file per play. */
-  src: string;
-  slideId?: string;
-  /** Always false: the reel keeps playing without the file. */
-  fatal: false;
-}
-
-/** Reported once per slide, when it has been shown to the end. */
-export interface SlideShown {
-  slideId: string;
-  /** How long the slide was actually shown (less when playback started in the middle of it). */
-  seconds: number;
-  /** Whether any of the slide's audio clips started playing. */
-  audioPlayed: boolean;
-  reel: ResolvedReel | null;
 }

@@ -91,31 +91,32 @@ export const chunk = <T>(list: T[], n: number): T[][] =>
 // --- Validation ----------------------------------------------------------------------------------
 
 /** Collects errors with paths, like validateReel: "photos[2].src: required". */
-export class Errors {
-  readonly list: string[] = [];
-  add(path: string, message: string) { this.list.push(`${path}: ${message}`); }
-  check(ok: boolean, path: string, message: string) { if (!ok) this.add(path, message); }
-  range(v: number | undefined, min: number, max: number, path: string) {
-    if (v != null && !(typeof v === 'number' && v >= min && v <= max)) this.add(path, `must be ${min}–${max}`);
-  }
-  text(v: string | undefined, max: number, path: string, required = false) {
-    if (required && !v) this.add(path, 'required');
-    else if (v != null && (typeof v !== 'string' || v.length > max)) this.add(path, `text of at most ${max} characters`);
-  }
-  items(v: unknown, min: number, max: number, path: string, what: string): v is unknown[] {
+export const collectErrors = () => {
+  const list: string[] = [];
+  const add = (path: string, message: string) => { list.push(`${path}: ${message}`); };
+  const check = (ok: boolean, path: string, message: string) => { if (!ok) add(path, message); };
+  const range = (v: number | undefined, min: number, max: number, path: string) => {
+    if (v != null && !(typeof v === 'number' && v >= min && v <= max)) add(path, `must be ${min}–${max}`);
+  };
+  const text = (v: string | undefined, max: number, path: string, required = false) => {
+    if (required && !v) add(path, 'required');
+    else if (v != null && (typeof v !== 'string' || v.length > max)) add(path, `text of at most ${max} characters`);
+  };
+  const items = (v: unknown, min: number, max: number, path: string, what: string): v is unknown[] => {
     const ok = Array.isArray(v) && v.length >= min && v.length <= max;
-    if (!ok) this.add(path, `${min}–${max} ${what}`);
+    if (!ok) add(path, `${min}–${max} ${what}`);
     return ok;
-  }
-  sound(s: Sound | undefined, path: string) {
+  };
+  const sound = (s: Sound | undefined, path: string) => {
     if (s == null) return;
-    this.check(typeof s.src === 'string' && s.src.length > 0, `${path}.src`, 'required');
-    this.range(s.duration, 0.1, 600, `${path}.duration`);
-    this.range(s.volume, 0, 1, `${path}.volume`);
-  }
-  common(doc: CommonFields) {
-    this.text(doc.title, 120, 'title', true);
-    this.check((doc.tags?.length ?? 0) <= 20, 'tags', 'at most 20 tags');
-    this.check(typeof doc.theme !== 'string' || doc.theme in THEMES, 'theme', `unknown theme – use ${Object.keys(THEMES).join(', ')}`);
-  }
-}
+    check(typeof s.src === 'string' && s.src.length > 0, `${path}.src`, 'required');
+    range(s.duration, 0.1, 600, `${path}.duration`);
+    range(s.volume, 0, 1, `${path}.volume`);
+  };
+  const common = (doc: CommonFields) => {
+    text(doc.title, 120, 'title', true);
+    check((doc.tags?.length ?? 0) <= 20, 'tags', 'at most 20 tags');
+    check(typeof doc.theme !== 'string' || doc.theme in THEMES, 'theme', `unknown theme – use ${Object.keys(THEMES).join(', ')}`);
+  };
+  return { list, add, check, range, text, items, sound, common };
+};
