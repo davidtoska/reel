@@ -194,6 +194,20 @@ npm run typecheck
 npm test
 ```
 
+## Releasing
+
+Packages are published to npm by GitHub Actions ([`publish.yml`](.github/workflows/publish.yml)) with
+trusted publishing – no npm token is stored anywhere. To release:
+
+```bash
+npm version patch -w reel-player --no-git-tag-version   # bump the packages that changed
+git commit -am "reel-player 1.0.1" && git push
+gh release create v1.0.1 --generate-notes               # starts the publish workflow
+```
+
+The workflow builds, type-checks and tests everything, then publishes each package whose version is
+not on npm yet, in dependency order.
+
 ## Stability
 
 `reel/1` is frozen: fields are never added, removed or given a new meaning, and a given story always
