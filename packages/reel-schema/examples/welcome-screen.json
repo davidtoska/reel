@@ -1,0 +1,60 @@
+{
+  "$schema": "https://unpkg.com/reel-schema@1/reel-1.schema.json",
+  "format": "reel/1",
+  "title": "Welcome to Birchwood House",
+  "description": "A silent loop for the screen in the entrance hall: a welcome, today's programme, the lunch menu and a view of the aquarium.",
+  "language": "en",
+  "tags": ["signage", "care home", "programme"],
+  "defaults": {
+    "text": { "style": { "size": 5.5, "color": "#1f2933", "shadow": false } },
+    "transition": { "type": "fade", "duration": 1 }
+  },
+  "slides": [
+    {
+      "id": "welcome", "duration": 10, "background": "#f4efe6",
+      "layers": [
+        { "type": "shape", "shape": "rect", "x": 0, "y": 0, "w": 100, "h": 15, "fill": "#2f5d50" },
+        { "type": "text", "text": "Birchwood House", "x": 5, "y": 5, "w": 90, "h": 10, "valign": "middle",
+          "style": { "size": 5, "weight": "bold", "color": "#ffffff" } },
+        { "type": "text", "text": "Welcome!", "x": 5, "y": 30, "w": 90, "align": "center", "fadeIn": 1,
+          "style": { "font": "serif", "size": 14, "weight": "bold", "color": "#2f5d50" } },
+        { "type": "text", "text": "Visiting hours every day 10:00–20:00", "x": 5, "y": 60, "w": 90, "align": "center", "start": 1.5, "fadeIn": 1 },
+        { "type": "shape", "shape": "ellipse", "x": 84, "y": 70, "w": 9, "h": 16, "fill": "#e9b44c" }
+      ]
+    },
+    {
+      "id": "today", "duration": 14, "background": "#f4efe6", "transition": { "type": "cut" },
+      "layers": [
+        { "type": "shape", "shape": "rect", "x": 0, "y": 0, "w": 100, "h": 15, "fill": "#2f5d50" },
+        { "type": "text", "text": "Today", "x": 5, "y": 5, "w": 90, "h": 10, "valign": "middle",
+          "style": { "size": 5, "weight": "bold", "color": "#ffffff" } },
+        { "type": "shape", "shape": "rect", "x": 8, "y": 20, "w": 84, "h": 70, "fill": "#ffffff", "radius": 2 },
+        { "type": "text", "text": "10:30 – Coffee and the newspaper\n13:00 – Lunch\n15:00 – Singing in the garden room\n18:00 – Dinner",
+          "x": 13, "y": 20, "w": 74, "h": 70, "valign": "middle", "style": { "size": 6, "lineHeight": 1.6 } }
+      ]
+    },
+    {
+      "id": "lunch", "duration": 12, "background": "#f4efe6", "transition": { "type": "cut" },
+      "layers": [
+        { "type": "shape", "shape": "rect", "x": 0, "y": 0, "w": 100, "h": 15, "fill": "#2f5d50" },
+        { "type": "text", "text": "Lunch and dinner", "x": 5, "y": 5, "w": 90, "h": 10, "valign": "middle",
+          "style": { "size": 5, "weight": "bold", "color": "#ffffff" } },
+        { "type": "shape", "shape": "rect", "x": 6, "y": 22, "w": 42, "h": 66, "fill": "#ffffff", "radius": 2 },
+        { "type": "shape", "shape": "rect", "x": 52, "y": 22, "w": 42, "h": 66, "fill": "#ffffff", "radius": 2 },
+        { "type": "text", "text": "Lunch\n\nFish soup\nApple cake", "x": 9, "y": 26, "w": 36, "align": "center",
+          "style": { "lineHeight": 1.4 } },
+        { "type": "text", "text": "Dinner\n\nPancakes\nwith jam", "x": 55, "y": 26, "w": 36, "align": "center",
+          "style": { "lineHeight": 1.4 } }
+      ]
+    },
+    {
+      "id": "aquarium", "duration": 20,
+      "layers": [
+        { "type": "video", "src": "media/aquarium.mp4", "duration": 24.5, "muted": true, "loop": true },
+        { "type": "text", "text": "Our aquarium – come and say hello to the fish", "x": 5, "y": 82, "w": 90, "align": "center",
+          "start": 2, "end": 18, "fadeIn": 1, "fadeOut": 1,
+          "style": { "color": "#ffffff", "background": "#00000099", "padding": 1.2, "radius": 1 } }
+      ]
+    }
+  ]
+}

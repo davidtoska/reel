@@ -1,7 +1,7 @@
 {
   "name": "reel-player",
-  "version": "1.0.0",
-  "description": "The Reel player for browsers: plays reel/1 documents on a letterboxed 16:9 canvas, as a function or as the <reel-player> custom element, full screen included. No dependencies besides reel-format.",
+  "version": "1.0.1",
+  "description": "The Reel player for browsers and Electron: a ReelPlayer class that plays reel/1 stories in any HTMLElement, letterboxed 16:9, with play, pause, seek, slide navigation and full screen. No dependencies besides reel-format.",
   "license": "MIT",
   "author": "davidtoska",
   "repository": {
@@ -19,8 +19,9 @@
     "reel",
     "slideshow",
     "player",
-    "web-component",
-    "custom-element",
+    "story",
+    "embed",
+    "electron",
     "fullscreen",
     "tv",
     "signage"
@@ -41,11 +42,12 @@
     "README.md"
   ],
   "dependencies": {
-    "reel-format": "^1.0.0"
+    "reel-format": "^1.0.1"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.ts",
     "prepublishOnly": "npm run build"
   }
 }

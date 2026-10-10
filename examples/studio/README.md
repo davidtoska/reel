@@ -5,7 +5,9 @@ An example application for making stories on screens, built on `reel-format` and
 - **People** use the visual builder. They drag layers on the real player, set times, text,
   colours, audio and music, upload files or take them from the demo library, and save.
 - **Scripts and AI agents** use the open HTTP API. `GET /api` describes everything needed, step by
-  step, with the schema, templates and limits.
+  step, with the schema, a complete `reel/1` example, templates and limits. The
+  [authoring guide](https://github.com/davidtoska/reel/blob/main/packages/reel-schema/GUIDE.md)
+  explains the format in more depth.
 
 Every reel is stored as a **package** (`data/reels/<id>/reel.json` + `media/`) and published as it is
 at `/reels/<id>/reel.json`. It can be played at `/play.html?src=…`, played in any other page with
@@ -43,8 +45,10 @@ curl -X POST localhost:8080/api/reels -H 'Content-Type: application/json' -d '{
   "media": [{ "from": "images/fjord.svg" }, { "from": "audio/chime.wav" }]
 }'
 
-# 2. Add your own file; use the returned "src" in the document
+# 2. Add your own file; use the returned "src" in the document. Audio and video need their length
+#    as "duration": the response has it for WAV files only, so measure mp3/m4a/aac/mp4 yourself:
 curl -X PUT --data-binary @voice.mp3 localhost:8080/api/reels/<id>/media/voice.mp3
+ffprobe -v error -show_entries format=duration -of csv=p=0 voice.mp3      # e.g. 4.2
 
 # 3. Replace the document (invalid documents are rejected with errors and paths)
 curl -X PUT localhost:8080/api/reels/<id> -H 'Content-Type: application/json' -d @reel.json

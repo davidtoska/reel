@@ -7,7 +7,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "lib": ["ES2023"],
-    "types": ["node"]
+    "types": []
   },
   "include": ["src"]
 }

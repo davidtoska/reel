@@ -1,4 +1,1 @@
 - Bruk arrow-functions.
-- Spitt pakene opp i: 
-  - Reel
-  - Reel-dom

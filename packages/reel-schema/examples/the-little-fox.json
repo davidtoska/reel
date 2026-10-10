@@ -1,0 +1,66 @@
+{
+  "$schema": "https://unpkg.com/reel-schema@1/reel-1.schema.json",
+  "format": "reel/1",
+  "title": "The Little Fox",
+  "description": "A bedtime story in three pages and a cover, read aloud, with pictures that slowly zoom and words that appear as they are read.",
+  "language": "en",
+  "tags": ["bedtime", "children", "animals"],
+  "music": { "src": "media/lullaby.mp3", "duration": 94.2, "volume": 0.25, "duckTo": 0.08 },
+  "defaults": {
+    "text": { "style": { "font": "serif", "size": 5.5, "background": "#00000088", "padding": 1.2, "radius": 1 } },
+    "transition": { "type": "fade", "duration": 1.5 }
+  },
+  "slides": [
+    {
+      "id": "cover", "duration": 7, "background": "#1b2a3a",
+      "layers": [
+        { "type": "image", "src": "media/cover.jpg", "alt": "A small red fox curled up under a pine tree at dusk", "opacity": 0.6,
+          "motion": { "from": { "scale": 1.1 }, "to": { "scale": 1 } } },
+        { "type": "text", "text": "The Little Fox", "x": 5, "y": 34, "w": 90, "align": "center", "start": 0.8, "fadeIn": 1.2,
+          "style": { "size": 10, "weight": "bold", "background": "#00000000", "shadow": true } },
+        { "type": "text", "text": "A bedtime story", "x": 5, "y": 52, "w": 90, "align": "center", "start": 2, "fadeIn": 1,
+          "style": { "size": 5, "italic": true, "background": "#00000000", "shadow": true } }
+      ],
+      "audio": [{ "src": "media/cover.mp3", "start": 1, "duration": 2.6, "transcript": "The Little Fox. A bedtime story." }]
+    },
+    {
+      "id": "page-1", "duration": 12,
+      "layers": [
+        { "type": "image", "src": "media/forest.jpg", "alt": "A forest at dusk, with a fox den between the roots of an old oak",
+          "motion": { "from": { "scale": 1 }, "to": { "scale": 1.15, "x": 40, "y": 60 } } },
+        { "type": "text", "text": "Once upon a time, a little fox lived at the edge of the forest.",
+          "x": 8, "y": 76, "w": 84, "align": "center", "start": 1, "fadeIn": 0.8 }
+      ],
+      "audio": [{ "src": "media/page-1.mp3", "start": 1, "duration": 8.6,
+                  "transcript": "Once upon a time, a little fox lived at the edge of the forest." }]
+    },
+    {
+      "id": "page-2", "duration": 11,
+      "layers": [
+        { "type": "image", "src": "media/fox-and-stars.png", "fit": "contain", "alt": "The fox sitting on a hill, looking up at a sky full of stars" },
+        { "type": "shape", "shape": "ellipse", "x": 60, "y": 6, "w": 18, "h": 32, "stroke": "#ffd27a", "strokeWidth": 0.6,
+          "start": 5, "end": 10, "fadeIn": 0.5, "fadeOut": 0.5 },
+        { "type": "text", "text": "Every evening, she watched the stars.", "x": 8, "y": 68, "w": 84, "align": "center", "start": 1, "fadeIn": 0.6 },
+        { "type": "text", "text": "She counted them, one by one.", "x": 8, "y": 80, "w": 84, "align": "center", "start": 4.6, "fadeIn": 0.6 }
+      ],
+      "audio": [
+        { "src": "media/page-2.mp3", "start": 1, "duration": 7.2,
+          "transcript": "Every evening, she watched the stars. She counted them, one by one." },
+        { "src": "media/twinkle.mp3", "start": 5, "duration": 1.4, "volume": 0.5, "duck": false }
+      ]
+    },
+    {
+      "id": "page-3", "duration": 11,
+      "layers": [
+        { "type": "image", "src": "media/den.jpg", "alt": "The fox asleep in her den, her tail over her nose",
+          "motion": { "from": { "scale": 1.15, "x": 50, "y": 40 }, "to": { "scale": 1 } } },
+        { "type": "text", "text": "Then she curled up her tail and fell asleep.", "x": 8, "y": 76, "w": 84, "align": "center", "start": 1, "fadeIn": 0.8 },
+        { "type": "text", "text": "The end", "x": 5, "y": 38, "w": 90, "align": "center", "start": 6.2, "fadeIn": 1.5,
+          "style": { "size": 9, "background": "#00000000", "shadow": true } }
+      ],
+      "audio": [{ "src": "media/page-3.mp3", "start": 1, "duration": 6.1,
+                  "transcript": "Then she curled up her tail and fell asleep. The end." }],
+      "credit": "Pictures and voice: the author"
+    }
+  ]
+}

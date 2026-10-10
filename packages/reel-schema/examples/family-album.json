@@ -1,0 +1,76 @@
+{
+  "$schema": "https://unpkg.com/reel-schema@1/reel-1.schema.json",
+  "format": "reel/1",
+  "title": "Summers at the Lake",
+  "description": "Family photos from the summer house, 1978–1985, with captions, a guitar tune and one memory told in Grandma's own voice.",
+  "language": "en",
+  "tags": ["family", "album", "summer"],
+  "music": { "src": "media/guitar.mp3", "duration": 151.3, "volume": 0.3, "duckTo": 0.08 },
+  "defaults": {
+    "text": { "style": { "size": 5, "background": "#000000a0", "padding": 1.2, "radius": 1 } },
+    "transition": { "type": "fade", "duration": 1.5 }
+  },
+  "slides": [
+    {
+      "id": "title", "duration": 7, "background": "#24323f",
+      "layers": [
+        { "type": "image", "src": "media/lake-1978.jpg", "alt": "The lake in the evening, seen from the summer house", "opacity": 0.4,
+          "motion": { "from": { "scale": 1.12 }, "to": { "scale": 1 } } },
+        { "type": "text", "text": "Summers at the Lake", "x": 5, "y": 34, "w": 90, "align": "center", "start": 0.5, "fadeIn": 1.2,
+          "style": { "font": "serif", "size": 9, "weight": "bold", "background": "#00000000", "shadow": true } },
+        { "type": "text", "text": "1978–1985", "x": 5, "y": 52, "w": 90, "align": "center", "start": 1.8, "fadeIn": 1,
+          "style": { "size": 5.5, "background": "#00000000", "shadow": true } }
+      ]
+    },
+    {
+      "id": "jetty", "duration": 8,
+      "layers": [
+        { "type": "image", "src": "media/jetty-1979.jpg", "alt": "Three children jumping off the wooden jetty into the lake",
+          "motion": { "from": { "scale": 1 }, "to": { "scale": 1.12, "x": 45, "y": 40 } } },
+        { "type": "shape", "shape": "rect", "x": 0, "y": 80, "w": 100, "h": 20, "fill": "#00000099" },
+        { "type": "text", "text": "Jumping off the jetty, 1979", "x": 5, "y": 80, "w": 90, "h": 15, "valign": "middle", "start": 0.5, "fadeIn": 0.8,
+          "style": { "size": 5.5, "background": "#00000000" } }
+      ],
+      "credit": "Photo: Grandpa"
+    },
+    {
+      "id": "blueberries", "duration": 8, "background": "#2b2b2b",
+      "layers": [
+        { "type": "image", "src": "media/blueberries-1981.jpg", "x": 5, "y": 5, "w": 50, "h": 90, "fit": "contain",
+          "alt": "A girl holding up a bucket full of blueberries" },
+        { "type": "text", "text": "Anna picked\nthe most berries –\nas always", "x": 58, "y": 34, "w": 37,
+          "start": 0.8, "fadeIn": 0.8, "style": { "font": "serif", "size": 5.5, "lineHeight": 1.4, "background": "#00000000", "shadow": false } }
+      ]
+    },
+    {
+      "id": "the-boat", "duration": 10,
+      "layers": [
+        { "type": "image", "src": "media/boat-1982.jpg", "alt": "Grandma and Grandpa rowing a small red boat",
+          "motion": { "from": { "scale": 1.15, "x": 50, "y": 45 }, "to": { "scale": 1, "x": 50, "y": 50 } } },
+        { "type": "text", "text": "“That was the summer we got the boat.”", "x": 8, "y": 80, "w": 84, "align": "center",
+          "start": 1, "fadeIn": 0.6, "style": { "font": "serif", "italic": true } }
+      ],
+      "audio": [{ "src": "media/grandma-boat.m4a", "start": 1, "duration": 3.4,
+                  "transcript": "That was the summer we got the boat." }],
+      "credit": "Photo: Uncle Per"
+    },
+    {
+      "id": "everyone", "duration": 9,
+      "layers": [
+        { "type": "image", "src": "media/everyone-1985.jpg", "alt": "The whole family on the steps of the summer house",
+          "motion": { "from": { "scale": 1.2, "x": 20, "y": 50 }, "to": { "scale": 1.2, "x": 80, "y": 50 } } },
+        { "type": "text", "text": "Everyone, the last summer at the lake", "x": 8, "y": 80, "w": 84, "align": "center", "start": 1, "fadeIn": 0.8 }
+      ],
+      "credit": "Photo: a kind neighbour"
+    },
+    {
+      "id": "credits", "duration": 8, "background": "#111111",
+      "layers": [
+        { "type": "text", "text": "With love, from all of us", "x": 5, "y": 30, "w": 90, "align": "center", "fadeIn": 1,
+          "style": { "font": "serif", "size": 7, "background": "#00000000" } },
+        { "type": "text", "text": "Photos: Grandpa, Uncle Per and family\nMusic: “Lake Song”, played by Erik", "x": 10, "y": 50, "w": 80,
+          "align": "center", "start": 1.5, "fadeIn": 1, "style": { "size": 4.5, "lineHeight": 1.5, "color": "#d9d9d9", "background": "#00000000" } }
+      ]
+    }
+  ]
+}

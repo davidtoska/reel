@@ -1,5 +1,6 @@
 // Reel packages: a reel and its media files as one .zip – reading, writing and checking.
-// Runs in Node 18+ and in browsers (uses only Uint8Array, TextEncoder and DecompressionStream).
+// Runs in Node 20.12+ and in browsers (uses only Uint8Array, TextEncoder, Blob and
+// DecompressionStream('deflate-raw'), which older Node versions do not have).
 //
 // The package format (Reel package 1.0):
 //
@@ -12,12 +13,14 @@
 //  - Every relative src in reel.json must exist in the package. Files nobody refers to are allowed
 //    but produce a warning. Files that operating systems add by themselves (__MACOSX/, ._*,
 //    .DS_Store, Thumbs.db, desktop.ini) are ignored silently.
-//  - Media files must have an extension listed in REEL_MEDIA_TYPES for their use.
+//  - Media files reel.json uses must have an extension listed in REEL_MEDIA_TYPES for their use
+//    (validateReel checks this). Other files are allowed, like any unused file, with a warning.
 //  - Readers may refuse packages larger than they are willing to handle (default here: 200 MB).
 
-import { REEL_MANIFEST, REEL_MEDIA_DIR, type Reel } from './format.ts';
-import { checkMediaSrc, validateReel } from './validate.ts';
+import { REEL_FORMAT, REEL_MANIFEST, type Reel } from './format.ts';
+import { validateReel } from './validate.ts';
 
+/** Limits of readReelPackage. A limit that is missing, negative or not a finite number uses the default. */
 export const REEL_PACKAGE_DEFAULTS = {
   /** Total uncompressed size of all files. */
   maxBytes: 200_000_000,
@@ -53,10 +56,16 @@ export const reelMediaRefs = (reel: Reel): string[] => {
  */
 export const checkPackageFiles = (reel: Reel, paths: Iterable<string>): { errors: string[]; warnings: string[] } => {
   const have = new Set([...paths].filter(p => !isSystemFile(p)));
-  const lower = new Map([...have].map(p => [p.toLowerCase(), p]));
+  // Paths must match exactly. Only the hint ignores case and Unicode normalization: zips made on
+  // macOS often have decomposed (NFD) names, which look the same as the NFC names editors write.
+  const fold = (p: string) => p.normalize('NFC').toLowerCase();
+  const similar = new Map([...have].map(p => [fold(p), p]));
   const refs = reelMediaRefs(reel);
   const errors = refs.filter(r => !have.has(r)).map(r => {
-    const near = lower.get(r.toLowerCase());
+    const near = similar.get(fold(r));
+    if (near && near.normalize('NFC') === r.normalize('NFC')) {
+      return `${r}: not in the package – the package has ${near} with the same letters in another Unicode form (zips made on macOS often store names decomposed, NFD); write the name the same way in ${REEL_MANIFEST} and in the package, or use plain ASCII names`;
+    }
     return `${r}: not in the package${near ? ` – did you mean ${near}?` : ''}`;
   });
   const used = new Set([REEL_MANIFEST, ...refs]);
@@ -82,31 +91,70 @@ export const crc32 = (data: Uint8Array) => {
   return (c ^ 0xffffffff) >>> 0;
 };
 
-const inflateRaw = async (data: Uint8Array): Promise<Uint8Array> => {
-  const stream = new Blob([data as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+/**
+ * Inflates a deflated entry, but never to more than `size` bytes – the size the zip directory gives.
+ * Returns null as soon as the data turns out larger, so a small zip cannot fill the memory (zip bomb).
+ */
+const inflateRaw = async (data: Uint8Array, size: number): Promise<Uint8Array | null> => {
+  const reader = new Blob([data as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    length += value.length;
+    if (length > size) { await reader.cancel().catch(() => {}); return null; }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(length);
+  let p = 0;
+  for (const c of chunks) { out.set(c, p); p += c.length; }
+  return out;
 };
 
 const cleanPath = (path: string) =>
   !path.startsWith('/') && !/^[a-z]:/i.test(path) && !path.includes('\\') && path.split('/').every(p => p !== '' && p !== '.' && p !== '..');
+
+/** A byte count for messages: 200 MB, 1 MB, 500 kB, 10 bytes. */
+const sizeText = (n: number) => (n >= 1e6 ? `${+(n / 1e6).toFixed(1)} MB` : n >= 1e3 ? `${+(n / 1e3).toFixed(1)} kB` : `${n} bytes`);
+
+// Zip header values. Made by "Unix, zip 2.0" with a regular file's mode: Info-ZIP unzip (the Linux
+// default) would otherwise convert the UTF-8 names of an MS-DOS-made zip from a DOS code page and
+// mangle names like blåbær.jpg. The date is 1980-01-01, the earliest valid DOS date (0 is invalid).
+const MADE_BY = 0x0314;
+const FILE_ATTRIBUTES = (0o100644 << 16) >>> 0;
+const DOS_DATE = 0x0021;
+/** 0xffff entries and 0xffffffff bytes or offsets mean ZIP64, which packages do not use. */
+const MAX_ENTRIES = 0xfffe;
+const MAX_OFFSET = 0xfffffffe;
 
 // --- Writing ------------------------------------------------------------------------------------
 
 /**
  * Builds a package zip: reel.json plus the given files (path → content, e.g. "media/a.jpg").
  * Files are stored without compression – media is already compressed.
+ *
+ * Throws an Error if the reel is not a valid reel/1 document (the errors of validateReel), if a path
+ * is not clean and relative, or if the zip would need ZIP64 (65 535 files or 4 GB). It does not
+ * check that the files cover the reel's references – use checkPackageFiles(reel, paths) for that.
  */
 export const writeReelPackage = (reel: Reel, files: Map<string, Uint8Array> | Record<string, Uint8Array>): Uint8Array => {
   const enc = new TextEncoder();
+  const json = JSON.stringify(reel, null, 2);
+  const checked = validateReel(json === undefined ? undefined : JSON.parse(json));
+  if (!checked.ok) throw new Error(`writeReelPackage: the reel is not a valid ${REEL_FORMAT} document:\n${checked.errors.join('\n')}`);
   const entries: [string, Uint8Array][] = [
-    [REEL_MANIFEST, enc.encode(JSON.stringify(reel, null, 2))],
+    [REEL_MANIFEST, enc.encode(json)],
     ...(files instanceof Map ? [...files] : Object.entries(files)).filter(([p]) => p !== REEL_MANIFEST),
   ];
+  const tooLarge = 'writeReelPackage: the package is too large for a zip without ZIP64 (4 GB)';
+  if (entries.length > MAX_ENTRIES) throw new Error(`writeReelPackage: too many files for a zip without ZIP64 (at most ${MAX_ENTRIES})`);
   const parts: Uint8Array[] = [];
   const central: Uint8Array[] = [];
   let offset = 0;
   for (const [path, data] of entries) {
-    if (!cleanPath(path)) throw new Error(`Invalid path in package: ${path}`);
+    if (!cleanPath(path)) throw new Error(`writeReelPackage: ${JSON.stringify(path)} is not a clean relative path (no leading /, drive letter, .., . or empty parts, no \\)`);
+    if (data.length > MAX_OFFSET || offset > MAX_OFFSET) throw new Error(tooLarge);
     const name = enc.encode(path);
     const crc = crc32(data);
     const local = new Uint8Array(30 + name.length);
@@ -115,6 +163,7 @@ export const writeReelPackage = (reel: Reel, files: Map<string, Uint8Array> | Re
     lv.setUint16(4, 20, true);       // version needed
     lv.setUint16(6, 0x0800, true);   // names are UTF-8
     lv.setUint16(8, 0, true);        // stored
+    lv.setUint16(12, DOS_DATE, true);
     lv.setUint32(14, crc, true);
     lv.setUint32(18, data.length, true);
     lv.setUint32(22, data.length, true);
@@ -125,19 +174,22 @@ export const writeReelPackage = (reel: Reel, files: Map<string, Uint8Array> | Re
     const dir = new Uint8Array(46 + name.length);
     const dv = new DataView(dir.buffer);
     dv.setUint32(0, 0x02014b50, true);
-    dv.setUint16(4, 20, true);
+    dv.setUint16(4, MADE_BY, true);
     dv.setUint16(6, 20, true);
     dv.setUint16(8, 0x0800, true);
+    dv.setUint16(14, DOS_DATE, true);
     dv.setUint32(16, crc, true);
     dv.setUint32(20, data.length, true);
     dv.setUint32(24, data.length, true);
     dv.setUint16(28, name.length, true);
+    dv.setUint32(38, FILE_ATTRIBUTES, true);
     dv.setUint32(42, offset, true);
     dir.set(name, 46);
     central.push(dir);
     offset += local.length + data.length;
   }
   const centralSize = central.reduce((s, b) => s + b.length, 0);
+  if (offset > MAX_OFFSET || centralSize > MAX_OFFSET) throw new Error(tooLarge);
   const end = new Uint8Array(22);
   const ev = new DataView(end.buffer);
   ev.setUint32(0, 0x06054b50, true);
@@ -156,10 +208,16 @@ export const writeReelPackage = (reel: Reel, files: Map<string, Uint8Array> | Re
 
 /**
  * Reads and checks a package zip. Returns the reel and its files (path → content), or every problem
- * found. Never throws for bad input.
+ * found. Never throws for bad input. Limits that are missing, negative or not finite numbers use the
+ * defaults in REEL_PACKAGE_DEFAULTS.
  */
 export const readReelPackage = async (zip: Uint8Array | ArrayBuffer, options: Partial<typeof REEL_PACKAGE_DEFAULTS> = {}): Promise<ReelPackageResult> => {
-  const limits = { ...REEL_PACKAGE_DEFAULTS, ...options };
+  const limit = (k: keyof typeof REEL_PACKAGE_DEFAULTS) => {
+    const v = options?.[k];
+    return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : REEL_PACKAGE_DEFAULTS[k];
+  };
+  const limits = { maxBytes: limit('maxBytes'), maxManifestBytes: limit('maxManifestBytes'), maxFiles: limit('maxFiles') };
+  const manifestTooLarge = `${REEL_MANIFEST} is larger than ${sizeText(limits.maxManifestBytes)}`;
   const bytes = zip instanceof Uint8Array ? zip : new Uint8Array(zip);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const dec = new TextDecoder();
@@ -206,7 +264,9 @@ export const readReelPackage = async (zip: Uint8Array | ArrayBuffer, options: Pa
     if (method !== 0 && method !== 8) { errors.push(`${path}: compression method ${method} is not supported – use stored or deflate`); continue; }
     if (csize === 0xffffffff || size === 0xffffffff) return fail('ZIP64 is not supported');
     total += size;
-    if (total > limits.maxBytes) return fail(`the package is larger than ${Math.round(limits.maxBytes / 1e6)} MB`);
+    if (total > limits.maxBytes) return fail(`the package is larger than ${sizeText(limits.maxBytes)}`);
+    // Never unpack a reel.json that is too large anyway (and unpacking stops at the size given here).
+    if (path === REEL_MANIFEST && size > limits.maxManifestBytes) return fail(manifestTooLarge);
     entries.push({ path, method, crc, csize, size, local });
   }
 
@@ -223,8 +283,9 @@ export const readReelPackage = async (zip: Uint8Array | ArrayBuffer, options: Pa
     const start = e.local + 30 + view.getUint16(e.local + 26, true) + view.getUint16(e.local + 28, true);
     if (start + e.csize > bytes.length) { errors.push(`${e.path}: the file is cut off`); continue; }
     const raw = bytes.subarray(start, start + e.csize);
-    let data: Uint8Array;
-    try { data = e.method === 0 ? raw : await inflateRaw(raw); } catch { errors.push(`${e.path}: could not be unpacked`); continue; }
+    let data: Uint8Array | null;
+    try { data = e.method === 0 ? raw : await inflateRaw(raw, e.size); } catch { errors.push(`${e.path}: could not be unpacked`); continue; }
+    if (!data) { errors.push(`${e.path}: the content is larger than the zip says`); continue; }
     if (data.length !== e.size || crc32(data) !== e.crc) { errors.push(`${e.path}: the content does not match its checksum`); continue; }
     files.set(e.path, data);
   }
@@ -232,21 +293,16 @@ export const readReelPackage = async (zip: Uint8Array | ArrayBuffer, options: Pa
 
   // reel.json: size, JSON, the format.
   const manifest = files.get(REEL_MANIFEST)!;
-  if (manifest.length > limits.maxManifestBytes) return fail(`${REEL_MANIFEST} is larger than ${Math.round(limits.maxManifestBytes / 1e3)} kB`);
+  if (manifest.length > limits.maxManifestBytes) return fail(manifestTooLarge);
   let doc: unknown;
   try { doc = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(manifest)); } catch { return fail(`${REEL_MANIFEST} is not valid UTF-8 JSON`); }
   const checked = validateReel(doc);
   if (!checked.ok) return { ok: false, errors: checked.errors.map(x => `${REEL_MANIFEST} ${x}`), warnings };
 
-  // Files: every reference exists; every media file has a known type.
+  // Files: every reference exists (validateReel has checked their types); unused files are warnings.
   const pkg = checkPackageFiles(checked.reel, files.keys());
   errors.push(...pkg.errors);
   warnings.push(...pkg.warnings);
-  for (const path of files.keys()) {
-    if (path === REEL_MANIFEST || !path.startsWith(REEL_MEDIA_DIR)) continue;
-    const kinds = (['image', 'audio', 'video'] as const).filter(k => checkMediaSrc(path, k) === null);
-    if (!kinds.length) errors.push(`${path}: unknown file type`);
-  }
   if (errors.length) return { ok: false, errors, warnings };
   files.delete(REEL_MANIFEST);
   return { ok: true, reel: checked.reel, files, warnings, errors: [] };

@@ -25,7 +25,12 @@ const showErrors = (title: string, list: string[]) => {
   errors.replaceChildren(h('strong', {}, title), h('ul', {}, list.map(x => h('li', {}, x))));
 };
 
-document.addEventListener('pointerdown', () => { hint.hidden = true; });
+// A click or tap anywhere (also on the hint) unlocks sound. Browsers count a mouse press on pointerdown
+// but a tap only on pointerup, so unlocking at any other moment would not be allowed to start sound.
+const isGesture = (e: PointerEvent) => (e.type === 'pointerdown') === (e.pointerType === 'mouse');
+const unlock = (e: PointerEvent) => { hint.hidden = true; if (isGesture(e)) player.unlockAudio(); };
+document.addEventListener('pointerdown', unlock);
+document.addEventListener('pointerup', unlock);
 document.addEventListener('keydown', e => {
   hint.hidden = true;
   const keys: Record<string, () => void> = {

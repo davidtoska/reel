@@ -5,12 +5,14 @@
 //   data/reels/<id>/source.json    the template document it was made from, if any (not part of the package)
 
 import { randomBytes } from 'node:crypto';
-import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { basename, join, sep } from 'node:path';
+import { copyFile, mkdir, open, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { basename, join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { REEL_MANIFEST, REEL_MEDIA_DIR, REEL_MEDIA_TYPES, checkPackageFiles, extensionOf, reelDuration, reelMediaRefs, writeReelPackage, type Reel } from 'reel-format';
 import { HttpError } from './http.ts';
 
-export const STUDIO_DIR = new URL('..', import.meta.url).pathname;
+// fileURLToPath, not URL.pathname: the path may contain spaces or non-ASCII characters (and C:\ on Windows).
+export const STUDIO_DIR = fileURLToPath(new URL('..', import.meta.url));
 export const DATA_DIR = join(STUDIO_DIR, 'data', 'reels');
 export const LIBRARY_DIR = join(STUDIO_DIR, 'library');
 
@@ -28,7 +30,10 @@ export interface MediaInfo {
   src: string;
   kind: Kind;
   bytes: number;
-  /** Seconds, for WAV files (other audio: read it from your source). */
+  /**
+   * Seconds, for WAV files only. For mp3, m4a, aac and mp4 the caller must measure it
+   * (e.g. ffprobe -v error -show_entries format=duration -of csv=p=0 file.mp3).
+   */
   duration?: number;
 }
 
@@ -40,7 +45,7 @@ export interface ReelSummary {
   duration: number;
   slides: number;
   updated: string;
-  /** URL of the first image in the reel, for previews. */
+  /** URL of the first image in the reel's own media/ folder, for previews (never a third-party URL). */
   thumbnail?: string;
 }
 
@@ -48,8 +53,8 @@ export interface ReelSummary {
 
 const ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
-export const checkId = (id: string) => {
-  if (!ID.test(id)) throw new HttpError(400, 'Invalid id – use a–z, 0–9 and -, at most 63 characters');
+export const checkId = (id: unknown) => {
+  if (typeof id !== 'string' || !ID.test(id)) throw new HttpError(400, 'Invalid id – use a–z, 0–9 and -, at most 63 characters');
   return id;
 };
 
@@ -58,9 +63,13 @@ export const newId = (title: string) => {
   return `${slug}-${randomBytes(3).toString('hex')}`;
 };
 
+const cleanName = (name: string) =>
+  basename(name).toLowerCase().normalize('NFKD').replace(/[^a-z0-9._-]+/g, '-').replace(/^[.-]+/, '').slice(0, 100);
+
 /** A safe file name for media/: lower case a–z, 0–9, -, _ and . with a known extension. */
-export const mediaName = (name: string) => {
-  const clean = basename(name).toLowerCase().normalize('NFKD').replace(/[^a-z0-9._-]+/g, '-').replace(/^[.-]+/, '').slice(0, 100);
+export const mediaName = (name: unknown) => {
+  if (typeof name !== 'string') throw new HttpError(400, 'A file name must be text, e.g. "photo.jpg"');
+  const clean = cleanName(name);
   const kind = KIND_BY_EXT.get(extensionOf(clean));
   if (!clean || !kind) throw new HttpError(400, `Unsupported file type: ${name} – use ${[...KIND_BY_EXT.keys()].join(', ')}`);
   return { name: clean, kind };
@@ -73,24 +82,41 @@ const exists = async (path: string) => stat(path).then(() => true, () => false);
 
 // --- Audio length -------------------------------------------------------------------------------
 
-/** Duration of a PCM WAV file in seconds, or undefined. */
-export const wavDuration = (buf: Buffer): number | undefined => {
-  if (buf.length < 44 || buf.toString('ascii', 0, 4) !== 'RIFF' || buf.toString('ascii', 8, 12) !== 'WAVE') return undefined;
-  let byteRate = 0;
-  for (let p = 12; p + 8 <= buf.length;) {
-    const id = buf.toString('ascii', p, p + 4);
-    const size = buf.readUInt32LE(p + 4);
-    if (id === 'fmt ') byteRate = buf.readUInt32LE(p + 16);
-    if (id === 'data') return byteRate ? Math.round((size / byteRate) * 100) / 100 : undefined;
-    p += 8 + size + (size % 2);
+/** Chunks read before giving up on finding 'data' (real files have a handful). */
+const MAX_WAV_CHUNKS = 64;
+
+/**
+ * Duration of a PCM WAV file in seconds, or undefined. Reads only the chunk headers (a few bytes
+ * each), never the samples, and stops at the end of the file however the sizes are written.
+ */
+export const wavDuration = async (path: string): Promise<number | undefined> => {
+  const file = await open(path);
+  try {
+    const { size: fileSize } = await file.stat();
+    const buf = Buffer.alloc(16);
+    const read = async (at: number, bytes: number) => (await file.read(buf, 0, bytes, at)).bytesRead === bytes;
+    if (!(await read(0, 12)) || buf.toString('ascii', 0, 4) !== 'RIFF' || buf.toString('ascii', 8, 12) !== 'WAVE') return undefined;
+    let byteRate = 0;
+    for (let p = 12, n = 0; n < MAX_WAV_CHUNKS && (await read(p, 8)); n++) {
+      const id = buf.toString('ascii', 0, 4);
+      const size = buf.readUInt32LE(4);
+      // fmt: audio format (2), channels (2), sample rate (4), byte rate (4) …
+      if (id === 'fmt ' && size >= 16 && (await read(p + 8, 12))) byteRate = buf.readUInt32LE(8);
+      // A truncated file (or a size written as 0xffffffff while recording) ends where the file ends.
+      if (id === 'data') return byteRate ? Math.round((Math.min(size, fileSize - p - 8) / byteRate) * 100) / 100 : undefined;
+      p += 8 + size + (size % 2);
+    }
+    return undefined;
+  } finally {
+    await file.close();
   }
-  return undefined;
 };
 
 const mediaInfo = async (path: string, name: string): Promise<MediaInfo> => {
   const kind = KIND_BY_EXT.get(extensionOf(name))!;
   const info = await stat(path);
-  const duration = extensionOf(name) === 'wav' ? wavDuration(await readFile(path)) : undefined;
+  // A file that is not a readable WAV only loses its duration.
+  const duration = extensionOf(name) === 'wav' ? await wavDuration(path).catch(() => undefined) : undefined;
   return { name, src: `${REEL_MEDIA_DIR}${name}`, kind, bytes: info.size, ...(duration && { duration }) };
 };
 
@@ -103,10 +129,11 @@ export const listReels = async (): Promise<ReelSummary[]> => {
     try {
       const { reel, source } = await getReel(id);
       const info = await stat(join(dir(id), REEL_MANIFEST));
-      const image = reel.slides.flatMap(s => s.layers).find(l => l.type === 'image')?.src;
+      // Only the reel's own files: a remote image would make every visitor of the gallery load it.
+      const image = reel.slides.flatMap(s => s.layers).flatMap(l => (l.type === 'image' && l.src.startsWith(REEL_MEDIA_DIR) ? [l.src] : []))[0];
       return {
         id, title: reel.title, source: (source as { format?: string })?.format ?? reel.format, duration: reelDuration(reel), slides: reel.slides.length,
-        updated: info.mtime.toISOString(), ...(image && { thumbnail: image.startsWith(REEL_MEDIA_DIR) ? `/reels/${id}/${image}` : image }),
+        updated: info.mtime.toISOString(), ...(image && { thumbnail: `/reels/${id}/${image}` }),
       };
     } catch { return null; }
   }));
@@ -140,8 +167,11 @@ export const deleteAllReels = () => rm(DATA_DIR, { recursive: true, force: true 
 
 /** Files under media/, including sub-folders (packages may use them). Names are relative to media/. */
 export const listMedia = async (id: string): Promise<MediaInfo[]> => {
-  const names = await readdir(mediaDir(id), { recursive: true }).catch(() => [] as string[]);
-  return Promise.all(names.map(n => n.split(sep).join('/')).filter(n => KIND_BY_EXT.has(extensionOf(n))).sort().map(n => mediaInfo(join(mediaDir(id), n), n)));
+  const root = mediaDir(id);
+  // Files only: a folder can have a name like x.wav too.
+  const entries = await readdir(root, { recursive: true, withFileTypes: true }).catch(() => []);
+  const names = entries.filter(d => d.isFile()).map(d => relative(root, join(d.parentPath, d.name)).split(sep).join('/'));
+  return Promise.all(names.filter(n => KIND_BY_EXT.has(extensionOf(n))).sort().map(n => mediaInfo(join(root, n), n)));
 };
 
 const checkSpace = async (id: string, adding: number, replacing: string) => {
@@ -163,16 +193,22 @@ export const importMedia = async (id: string, from: string, as?: string): Promis
   const lib = (await listLibrary()).find(f => f.path === from);
   if (!lib) throw new HttpError(400, `No library file ${from} – see GET /api/library`);
   const { name } = mediaName(as ?? basename(from));
+  await checkSpace(id, lib.bytes, name);
   await mkdir(mediaDir(id), { recursive: true });
   await copyFile(join(LIBRARY_DIR, lib.path), join(mediaDir(id), name));
   return mediaInfo(join(mediaDir(id), name), name);
 };
 
+/**
+ * Deletes a file by its name as listMedia gives it (e.g. Photos/Big.PNG from an imported package).
+ * The name an upload was sent with (Fjord.SVG for fjord.svg) works too.
+ */
 export const deleteMedia = async (id: string, fileName: string) => {
-  const { name } = mediaName(fileName);
-  const path = join(mediaDir(id), name);
-  if (!(await exists(path))) throw new HttpError(404, `No file ${REEL_MEDIA_DIR}${name}`);
-  await rm(path);
+  const files = await listMedia(id);
+  const file = files.find(m => m.name === fileName) ?? files.find(m => m.name === cleanName(fileName));
+  if (!file) throw new HttpError(404, `No file ${REEL_MEDIA_DIR}${fileName}`);
+  await rm(join(mediaDir(id), file.name));
+  return file.name;
 };
 
 /** Errors for references to files the package does not have (the same check readReelPackage does). */

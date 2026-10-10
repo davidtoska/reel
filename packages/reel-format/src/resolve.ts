@@ -15,31 +15,53 @@ export interface ResolveOptions {
   /** Identifies the reel in events. Default: baseUrl, else the title. */
   id?: string;
   /**
-   * URL of reel.json. Relative `media/…` references are resolved against it, so a package works
-   * wherever it is published. Without it, references are resolved against the page by the browser.
+   * Absolute URL of reel.json, e.g. `res.url` after a fetch, or an `https:` or `file:` URL. Relative
+   * `media/…` references are resolved against it, so a package works wherever it is published.
+   * Without it, references are left as they are (a browser then resolves them against the page).
+   * A relative baseUrl such as `/reels/x/reel.json` throws a TypeError – make it absolute first,
+   * e.g. `new URL(path, document.baseURI)`.
    */
   baseUrl?: string | URL;
 }
+
+/** A copy without the fields set to undefined, so spreading it does not hide a default. */
+const defined = <T extends object>(o: T | undefined): Partial<T> =>
+  Object.fromEntries(Object.entries(o ?? {}).filter(([, v]) => v !== undefined)) as Partial<T>;
+
+const parseBase = (base: string) => {
+  try { return new URL(base); } catch {
+    throw new TypeError(`resolveReel: baseUrl must be an absolute URL such as https://example.com/my-reel/reel.json, got ${JSON.stringify(base)}`);
+  }
+};
 
 /**
  * Merges defaults the way Reel 1.0 specifies:
  *  - text style: player default → defaults.text.style → layer.style
  *  - transition: slide.transition → defaults.transition (a fade without duration lasts 1 s)
  *  - video.muted: true when the slide has audio clips, else false
- * and resolves relative media references against `baseUrl`.
+ * and resolves relative media references against `baseUrl`. Style fields set to undefined (possible
+ * in documents built in JS) count as left out.
  *
  * Expects a valid document – run `validateReel()` first on anything that comes from outside.
+ * Throws a TypeError if `baseUrl` is not an absolute URL, or if a reference cannot be resolved
+ * against it.
  */
 export const resolveReel = (reel: Reel, options: ResolveOptions = {}): ResolvedReel => {
-  const base = options.baseUrl != null ? String(options.baseUrl) : undefined;
-  const url = (src: string) => (base ? new URL(src, base).href : src);
-  const textDefaults: TextStyle = reel.defaults?.text?.style ?? {};
+  const base = options.baseUrl != null && String(options.baseUrl) !== '' ? String(options.baseUrl) : undefined;
+  const baseUrl = base ? parseBase(base) : undefined;
+  const url = (src: string) => {
+    if (!baseUrl) return src;
+    try { return new URL(src, baseUrl).href; } catch {
+      throw new TypeError(`resolveReel: ${JSON.stringify(src)} cannot be resolved against baseUrl ${JSON.stringify(base)}`);
+    }
+  };
+  const textDefaults: TextStyle = defined(reel.defaults?.text?.style);
 
   const slides = reel.slides.map((slide): Slide => {
     const hasAudio = (slide.audio?.length ?? 0) > 0;
     const layers = slide.layers.map((layer): Layer => {
       switch (layer.type) {
-        case 'text': return { ...layer, style: { ...textDefaults, ...layer.style } };
+        case 'text': return { ...layer, style: { ...textDefaults, ...defined(layer.style) } };
         case 'video': return { ...layer, src: url(layer.src), muted: layer.muted ?? hasAudio };
         case 'image': return { ...layer, src: url(layer.src) };
         default: return layer;

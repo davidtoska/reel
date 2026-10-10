@@ -76,11 +76,16 @@ const handWritten: Reel = {
 const handWrittenMedia: MediaImport[] = ['images/fjord.svg', 'images/aurora.svg', 'images/stripes.svg', 'images/sunset.svg',
   'audio/music-calm.wav', 'audio/chime.wav', 'audio/waves.wav'].map(from => ({ from }));
 
-export const seed = async () => {
+const reset = async () => {
   await deleteAllReels();
   await createReel(handWritten, handWrittenMedia, 'demo-trip');
   for (const t of TEMPLATES) await createReel(t.example.document, t.example.media, `demo-${t.format.replace(/^reel-|\/\d+$/g, '')}`);
 };
+
+let running: Promise<void> | undefined;
+
+/** Deletes every reel and restores the demo reels. Overlapping calls share one run. */
+export const seed = () => (running ??= reset().finally(() => { running = undefined; }));
 
 export const seedIfEmpty = async () => {
   if ((await listReels()).length === 0) await seed();

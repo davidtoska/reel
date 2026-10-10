@@ -21,6 +21,7 @@ let layerIndex = -1;
 let frameAt = 2;          // seconds into the selected slide shown in the preview
 let playing = false;
 let dirty = false;
+let edits = 0;            // counts changes, so a save does not drop edits made while it was under way
 
 type Obj = Record<string, unknown>;
 const slide = () => doc.slides[slideIndex];
@@ -69,6 +70,7 @@ const showProblems = (list: string[]) => {
 let previewTimer: ReturnType<typeof setTimeout> | undefined;
 /** Called after every edit: re-validate, and redraw the preview shortly after. */
 const changed = (redrawPanels = false) => {
+  edits++;
   dirty = true;
   showProblems(check());
   if (redrawPanels) render();
@@ -76,26 +78,38 @@ const changed = (redrawPanels = false) => {
 };
 const f = fields({ changed: () => changed() });
 
-/** The document without empty objects the forms leave behind (e.g. `style: {}`). */
+/** Optional objects the forms create empty: a text style, defaults.text and defaults. */
+const PRUNED_WHEN_EMPTY = new Set(['style', 'text', 'defaults']);
+
+/**
+ * The document without the empty optional objects the forms leave behind (e.g. `style: {}`).
+ * Other empty objects stay: an empty motion.from or motion.to is required and means the defaults.
+ */
 const cleaned = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(cleaned);
   if (!value || typeof value !== 'object') return value;
   const out: Obj = {};
   for (const [k, v] of Object.entries(value)) {
     const c = cleaned(v);
-    if (c && typeof c === 'object' && !Array.isArray(c) && Object.keys(c).length === 0) continue;
+    if (PRUNED_WHEN_EMPTY.has(k) && c && typeof c === 'object' && !Array.isArray(c) && Object.keys(c).length === 0) continue;
     out[k] = c;
   }
   return out;
 };
 
 const save = async () => {
+  const at = edits;
   try {
-    doc = cleaned(doc) as Reel;
-    await api.save(id, doc);
-    dirty = false;
+    const body = cleaned(doc) as Reel;
+    await api.save(id, body);
     madeFrom = null;
-    render(); // the forms must point at the cleaned document
+    // Swap in the cleaned copy only now, and only if nothing was edited meanwhile: the forms are bound
+    // to `doc`, and after a failed save they must stay bound to the document the user is editing.
+    if (edits === at) {
+      doc = body;
+      dirty = false;
+      render();
+    }
     showProblems(check());
     toast('Saved');
   } catch (err) {
@@ -224,7 +238,11 @@ playBtn.addEventListener('click', () => {
   };
   follow();
 });
-document.addEventListener('pointerdown', () => player.unlockAudio());
+// Clicks and taps anywhere in the editor (e.g. on Play) count as the gesture browsers need for sound:
+// a mouse press on pointerdown, a tap on pointerup.
+const unlockOnGesture = (e: PointerEvent) => { if ((e.type === 'pointerdown') === (e.pointerType === 'mouse')) player.unlockAudio(); };
+document.addEventListener('pointerdown', unlockOnGesture);
+document.addEventListener('pointerup', unlockOnGesture);
 // Full screen shows only the host element – the overlay stays behind.
 fullBtn.addEventListener('click', () => player.toggleFullscreen().catch(err => toast(`Full screen not allowed: ${err.message}`, 'error')));
 document.addEventListener('fullscreenchange', () => requestAnimationFrame(drawOverlay));

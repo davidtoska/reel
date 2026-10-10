@@ -29,7 +29,7 @@ const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(mi
 /** n percent of the canvas height, as CSS. */
 const ch = (n: number) => `calc(var(--reel-h) * ${n} / 100)`;
 
-/** Keyframes for a layer's visibility over the whole slide: off before start, fade in/out, off after end. */
+/** Keyframes for a layer's visibility over the whole slide: off before start, fade in/out, off after end. Advanced export, stable in 1.x. */
 export const visibilityKeyframes = (layer: LayerBase, D: number): Keyframe[] => {
   const o = clamp(layer.opacity ?? 1, 0, 1);
   const s = clamp(layer.start ?? 0, 0, D);
@@ -46,7 +46,7 @@ export const visibilityKeyframes = (layer: LayerBase, D: number): Keyframe[] => 
   return points.map(([t, opacity]) => ({ offset: previous = Math.max(previous, D > 0 ? clamp(t / D, 0, 1) : 0), opacity }));
 };
 
-/** Keyframes for a slow zoom and pan towards a point in the image, through the layer's time. */
+/** Keyframes for a slow zoom and pan towards a point in the image, through the layer's time. Advanced export, stable in 1.x. */
 export const motionKeyframes = (motion: Motion, layer: LayerBase, D: number): Keyframe[] => {
   const point = (p?: MotionPoint) => ({ transform: `scale(${clamp(p?.scale ?? 1, 1, 2)})`, transformOrigin: `${p?.x ?? 50}% ${p?.y ?? 50}%` });
   const s = clamp(layer.start ?? 0, 0, D);
@@ -101,11 +101,14 @@ export interface EngineOptions {
   element: HTMLElement;
   /** A media file could not be loaded. Playback continues without it. */
   onError?: (error: ReelPlayerError) => void;
-  /** The browser refused to play sound before a user gesture. Call `unlockAudio()` on the next click or key press. */
+  /**
+   * The browser refused to play sound before a user gesture. Call `unlockAudio()` on the next click or key press.
+   * Only reported while playing; refusals while paused (still frames) are retried on resume().
+   */
   onAudioBlocked?: () => void;
   /** A slide has been shown to its end. */
   onSlideShown?: (shown: SlideShown) => void;
-  /** The last slide has been shown to its end. The player stays on it until told otherwise. */
+  /** The last slide has been shown to its end. The engine keeps running until told otherwise (pause it to hold the last frame). */
   onEnded?: (reel: ResolvedReel) => void;
 }
 
@@ -120,6 +123,9 @@ export interface Engine {
   unlockAudio: () => void;
   /** Current position in the reel (s). */
   position: () => number;
+  /** Index of the slide on screen, or -1. It changes when the engine draws the next slide, which can be a
+   * moment after the clock passes the slide's start (timers run late), or never (a listener paused). */
+  shownSlide: () => number;
   readonly paused: boolean;
   readonly reel: ResolvedReel | null;
   /** Stops and lets go of the element: removes its content and every listener and observer. */
@@ -148,6 +154,10 @@ export const createEngine = ({ element, onError = () => {}, onAudioBlocked = () 
   let preloaded: HTMLImageElement[] = [];  // images loaded ahead; kept so they are not collected
   let audioBlocked = false;
   const mutedByBlock = new Set<Video>();  // video layers playing without sound because sound was refused
+  // Bumped whenever the canvas is cleared (play, stop, destroy). Callbacks run listeners synchronously,
+  // and a listener may pause, seek, load another reel or destroy the player: work that was in progress
+  // checks the generation afterwards and stops when it changed.
+  let gen = 0;
 
   const position = () => (paused ? basePos : basePos + (performance.now() - baseT) / 1000);
   const reelEnd = () => (starts.length ? starts.at(-1)! + reel!.slides.at(-1)!.duration : 0);
@@ -158,10 +168,13 @@ export const createEngine = ({ element, onError = () => {}, onAudioBlocked = () 
   };
 
   // --- The canvas: 16:9, centred, black bars ---------------------------------------------------
+  const px = (v: string) => parseFloat(v) || 0;
   const fit = () => {
-    const W = element.clientWidth;
-    const H = element.clientHeight;
-    if (!W || !H) return;
+    // The stage fills the host's content box, so the host's padding is not part of the picture.
+    const cs = getComputedStyle(element);
+    const W = element.clientWidth - px(cs.paddingLeft) - px(cs.paddingRight);
+    const H = element.clientHeight - px(cs.paddingTop) - px(cs.paddingBottom);
+    if (!(W > 0) || !(H > 0)) return;
     const height = Math.min(H, W * 9 / 16);
     canvas.style.width = `${height * 16 / 9}px`;
     canvas.style.height = `${height}px`;
@@ -204,7 +217,12 @@ export const createEngine = ({ element, onError = () => {}, onAudioBlocked = () 
     if (target !== musicTarget) { musicTarget = target; rampMusic(target); }
   };
 
-  const playMusic = () => music.play().catch(err => { if (err?.name === 'NotAllowedError') soundRefused(); });
+  // Refusals while paused come from a still frame (the engine plays and pauses at once to draw it).
+  // They are ignored: resume() plays the same media again, and a refusal then is reported.
+  const playMusic = () => {
+    const g = gen;
+    music.play().catch(err => { if (g === gen && !paused && err?.name === 'NotAllowedError') soundRefused(); });
+  };
 
   const startMusic = (pos: number) => {
     const m = reel!.music;
@@ -284,6 +302,18 @@ export const createEngine = ({ element, onError = () => {}, onAudioBlocked = () 
     ss.animations.push(animate(box, visibilityKeyframes(layer, D), D, sp));
   };
 
+  const playVideo = (ss: ShownSlide, v: Video) => {
+    const { el } = v;
+    el.play().catch(err => {
+      if (paused || ss.dead || !v.playing || err?.name !== 'NotAllowedError' || el.muted) return;
+      // Sound refused: show the video without sound until unlockAudio().
+      soundRefused();
+      el.muted = true;
+      mutedByBlock.add(v);
+      el.play().catch(() => {});
+    });
+  };
+
   // A video layer plays only within its time window, from trimStart + the time since the layer started.
   // Returns seconds until the layer needs to be checked again.
   const syncVideo = (ss: ShownSlide, v: Video, sp: number) => {
@@ -303,14 +333,7 @@ export const createEngine = ({ element, onError = () => {}, onAudioBlocked = () 
       if (inside >= length) { el.currentTime = trim + length - 0.05; v.finished = true; return e - sp; }
       el.currentTime = trim + inside;
       v.playing = true;
-      el.play().catch(err => {
-        if (ss.dead || err?.name !== 'NotAllowedError' || el.muted) return;
-        // Sound refused: show the video without sound until the first key press.
-        soundRefused();
-        el.muted = true;
-        mutedByBlock.add(v);
-        el.play().catch(() => {});
-      });
+      playVideo(ss, v);
     }
     return e - sp;
   };
@@ -332,19 +355,24 @@ export const createEngine = ({ element, onError = () => {}, onAudioBlocked = () 
     return k;
   };
 
+  const playClip = (ss: ShownSlide, k: Clip) => {
+    k.el!.play().catch(err => {
+      // While paused the clip stays 'playing', so resume() tries again.
+      if (paused || ss.dead || k.state !== 'playing' || err?.name !== 'NotAllowedError') return;
+      // Narration does not start later in the middle of a sentence – it is skipped.
+      k.state = 'skipped';
+      soundRefused();
+      updateDucking();
+    });
+  };
+
   const startClip = (ss: ShownSlide, k: Clip, sp: number) => {
     const el = k.el!;
     k.state = 'playing';
     const inside = sp - k.start;
     if (inside > 0.05) el.currentTime = inside;
     el.volume = clamp(k.volume ?? 1, 0, 1);
-    el.play().catch(err => {
-      if (ss.dead || k.state !== 'playing' || err?.name !== 'NotAllowedError') return;
-      // Narration does not start later in the middle of a sentence – it is skipped.
-      k.state = 'skipped';
-      soundRefused();
-      updateDucking();
-    });
+    playClip(ss, k);
   };
 
   // --- Slides ------------------------------------------------------------------------------------
@@ -417,7 +445,15 @@ export const createEngine = ({ element, onError = () => {}, onAudioBlocked = () 
   const switchTo = (i: number, p: number) => {
     const old = active;
     if (old) {
-      if (p >= starts[old.index] + old.slide.duration - 0.05) report(old);
+      if (p >= starts[old.index] + old.slide.duration - 0.05) {
+        const g = gen;
+        report(old);
+        // A listener moved on (loaded, seeked, stopped, destroyed): nothing more to do here.
+        if (g !== gen) return;
+        // A listener paused: keep the old slide and hold the clock on its last moment, so the position
+        // matches what is shown (next() then goes to the slide after it). resume() comes back here.
+        if (paused) { basePos = Math.min(basePos, starts[old.index] + old.slide.duration - 0.001); return; }
+      }
       silence(old);
       tearDown(previous);
       previous = old;
@@ -429,13 +465,20 @@ export const createEngine = ({ element, onError = () => {}, onAudioBlocked = () 
   const tick = () => {
     clearTimeout(timer);
     if (!reel || paused) return;
+    const g = gen;
     const p = position();
     const i = indexAt(p);
-    if (!active || active.index !== i) switchTo(i, p);
+    if (!active || active.index !== i) {
+      switchTo(i, p);
+      if (g !== gen || paused) return;
+    }
     const ss = active!;
     const sp = p - starts[i];
     const last = i === reel.slides.length - 1;
-    if (last && sp >= ss.slide.duration - 0.05) report(ss);
+    if (last && sp >= ss.slide.duration - 0.05) {
+      report(ss);
+      if (g !== gen || paused) return;
+    }
 
     let next = ss.slide.duration - sp; // until the slide is over
     for (const k of ss.clips) {
@@ -452,20 +495,24 @@ export const createEngine = ({ element, onError = () => {}, onAudioBlocked = () 
     timer = setTimeout(tick, clamp(next * 1000, 20, MAX_WAIT_MS));
   };
 
+  /** Clears the canvas. False when a 'slideshown' listener has already stopped, replaced or destroyed the reel. */
   const tearDownAll = () => {
+    const g = ++gen;
     clearTimeout(timer);
     clearInterval(rampTimer);
     // The last slide has usually just finished when the caller moves on.
     if (active && reel && position() >= starts[active.index] + active.slide.duration - 0.5) report(active);
+    if (g !== gen) return false;
     tearDown(previous);
     tearDown(active);
     previous = active = null;
     preloaded = [];
     music.pause();
+    return true;
   };
 
   const stop = () => {
-    tearDownAll();
+    if (!tearDownAll()) return;
     reel = null;
     paused = false;
     music.removeAttribute('src');
@@ -475,7 +522,7 @@ export const createEngine = ({ element, onError = () => {}, onAudioBlocked = () 
 
   return {
     play: (next, offset = 0) => {
-      tearDownAll();
+      if (!tearDownAll()) return;
       reel = next;
       starts = slideStarts(reel.slides ?? []);
       reportedMissing = new Set();
@@ -516,8 +563,12 @@ export const createEngine = ({ element, onError = () => {}, onAudioBlocked = () 
         ss.paused.forEach(a => a.play());
         ss.paused = [];
       }
-      for (const k of active?.clips ?? []) if (k.state === 'playing') k.el!.play().catch(() => {});
-      for (const v of active?.videos ?? []) if (v.playing) v.el.play().catch(() => {});
+      // The same helpers as at the start, so a refusal now is handled and reported.
+      const shown = active;
+      if (shown) {
+        for (const k of shown.clips) if (k.state === 'playing') playClip(shown, k);
+        for (const v of shown.videos) if (v.playing) playVideo(shown, v);
+      }
       if (music.getAttribute('src')) {
         if (musicTarget != null) music.volume = musicTarget;
         playMusic();
@@ -532,6 +583,7 @@ export const createEngine = ({ element, onError = () => {}, onAudioBlocked = () 
       if (reel && !paused && music.getAttribute('src') && music.paused) playMusic();
     },
     position: () => (reel ? Math.min(position(), reelEnd()) : 0),
+    shownSlide: () => (active && !active.dead ? active.index : -1),
     get paused() { return paused; },
     get reel() { return reel; },
     destroy: () => {

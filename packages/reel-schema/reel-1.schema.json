@@ -2,651 +2,745 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unpkg.com/reel-schema@1/reel-1.schema.json",
   "title": "Reel 1.0",
-  "description": "A reel: slides with timed layers (image, video, text, shape), audio clips and music on a 16:9 canvas. Positions and sizes are percent of the canvas; times are seconds from the start of the slide. Rules that depend on other fields (times within the slide, unique slide ids) are checked by validateReel() in the reel-format package.",
+  "description": "A reel/1 document (reel.json): a story told as slides on a 16:9 canvas. Each slide has timed layers (image, video, text, shape) and audio clips; music can play under the whole reel. Units: x and w are percent of the canvas width, y and h percent of the canvas height; text size, padding, radius and strokeWidth are percent of the canvas height; times are seconds from the start of the slide; volume and opacity are 0–1. Unknown fields are errors. Rules this schema cannot express (unique slide ids, layer and audio times within the slide, video trimStart < duration, https URLs that parse, no percent-encoded dot segments in paths) are listed in the reel-schema README and checked by validateReel() in the reel-format package. Authoring guide: https://unpkg.com/reel-schema@1/GUIDE.md",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "format",
-    "title",
-    "slides"
-  ],
+  "required": ["format", "title", "slides"],
   "properties": {
+    "$schema": {
+      "description": "Optional: the URL of this schema, so editors offer autocompletion and checks. Ignored by players – it is the only field that is not part of the format. Use https://unpkg.com/reel-schema@1/reel-1.schema.json.",
+      "type": "string",
+      "examples": ["https://unpkg.com/reel-schema@1/reel-1.schema.json"]
+    },
     "format": {
+      "description": "Always \"reel/1\". reel/1 is frozen: fields are never added, removed or given a new meaning.",
       "const": "reel/1"
     },
     "title": {
+      "description": "Title of the reel, 1–120 characters. Shown in lists and catalogues; the player does not draw it – put a title card on the first slide for that.",
       "type": "string",
       "minLength": 1,
-      "maxLength": 120
+      "maxLength": 120,
+      "examples": ["The Little Fox"]
     },
     "description": {
+      "description": "What the reel is about, at most 500 characters. Not shown by the player.",
       "type": "string",
       "maxLength": 500
     },
     "language": {
+      "description": "BCP 47 language tag of the text and narration, at most 35 characters.",
       "type": "string",
-      "maxLength": 35
+      "maxLength": 35,
+      "examples": ["en", "nb", "pt-BR"]
     },
     "tags": {
+      "description": "Keywords for catalogues and search: at most 20 tags of 1–40 characters.",
       "type": "array",
       "maxItems": 20,
-      "items": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 40
-      }
+      "items": { "description": "A tag, 1–40 characters.", "type": "string", "minLength": 1, "maxLength": 40 },
+      "examples": [["bedtime", "animals"]]
     },
     "music": {
+      "description": "Background music under the whole reel. It loops, and is lowered while audio clips with duck play.",
+      "$ref": "#/$defs/music"
+    },
+    "defaults": {
+      "description": "Values used when a slide or layer does not set its own: a text style and a transition.",
+      "$ref": "#/$defs/defaults"
+    },
+    "slides": {
+      "description": "The slides, played in order, 1–500. The reel lasts as long as its slides together.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": { "$ref": "#/$defs/slide" }
+    }
+  },
+  "examples": [
+    {
+      "$schema": "https://unpkg.com/reel-schema@1/reel-1.schema.json",
+      "format": "reel/1",
+      "title": "Hello",
+      "slides": [
+        {
+          "id": "hello",
+          "duration": 6,
+          "background": "#1d3557",
+          "layers": [
+            {
+              "type": "text",
+              "text": "Hello!",
+              "x": 5,
+              "y": 38,
+              "w": 90,
+              "align": "center",
+              "fadeIn": 1,
+              "style": { "size": 12, "weight": "bold" }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "color": {
+      "title": "Colour",
+      "description": "A colour as #rrggbb or #rrggbbaa (hexadecimal, any case). The last pair is opacity: #00000099 is black at 60 %. Short forms (#fff), names (white) and rgb() are not allowed – write #ffffff.",
+      "$comment": "The \"not\" rejects a newline for regex engines (Python, .NET, PCRE) in which $ also matches before a final newline.",
+      "type": "string",
+      "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+      "not": { "pattern": "\\n" },
+      "examples": ["#ffffff", "#00000099", "#ffd27a"]
+    },
+    "imageSrc": {
+      "title": "Image src",
+      "description": "An image file: media/… (a file in the package, relative to reel.json) or an https:// URL, at most 2000 characters. A relative path ends in .jpg, .jpeg, .png, .webp, .svg or .gif (any case); its segments are separated by / and none is empty, \".\" or \"..\"; it has no \\, ?, # or control characters (spaces and other characters are fine, e.g. media/my photo.jpg). An https:// URL must be a valid absolute URL with a host and no spaces or control characters; any path works (a CDN URL without an extension is fine), but the file should be of a listed type. http:// is not allowed.",
+      "$comment": "The \"not\" rejects a newline for regex engines (Python, .NET, PCRE) in which $ also matches before a final newline.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "^(https://[^/?#\\x00-\\x20\\x7F]+([/?#][^\\x00-\\x20\\x7F]*)?|media/(([^/\\\\?#.\\x00-\\x1F\\x7F][^/\\\\?#\\x00-\\x1F\\x7F]*|\\.[^/\\\\?#.\\x00-\\x1F\\x7F][^/\\\\?#\\x00-\\x1F\\x7F]*|\\.\\.[^/\\\\?#\\x00-\\x1F\\x7F]+)/)*[^/\\\\?#\\x00-\\x1F\\x7F]*\\.([jJ][pP][gG]|[jJ][pP][eE][gG]|[pP][nN][gG]|[wW][eE][bB][pP]|[sS][vV][gG]|[gG][iI][fF]))$",
+      "not": { "pattern": "\\n" },
+      "examples": ["media/forest.jpg", "media/pages/page-01.png", "https://example.com/photos/fox.webp"]
+    },
+    "audioSrc": {
+      "title": "Audio src",
+      "description": "An audio file: media/… (a file in the package, relative to reel.json) or an https:// URL, at most 2000 characters. A relative path ends in .mp3, .m4a, .aac or .wav (any case); its segments are separated by / and none is empty, \".\" or \"..\"; it has no \\, ?, # or control characters (spaces and other characters are fine, e.g. media/my voice.mp3). An https:// URL must be a valid absolute URL with a host and no spaces or control characters; any path works (a CDN URL without an extension is fine), but the file should be of a listed type. http:// is not allowed.",
+      "$comment": "The \"not\" rejects a newline for regex engines (Python, .NET, PCRE) in which $ also matches before a final newline.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "^(https://[^/?#\\x00-\\x20\\x7F]+([/?#][^\\x00-\\x20\\x7F]*)?|media/(([^/\\\\?#.\\x00-\\x1F\\x7F][^/\\\\?#\\x00-\\x1F\\x7F]*|\\.[^/\\\\?#.\\x00-\\x1F\\x7F][^/\\\\?#\\x00-\\x1F\\x7F]*|\\.\\.[^/\\\\?#\\x00-\\x1F\\x7F]+)/)*[^/\\\\?#\\x00-\\x1F\\x7F]*\\.([mM][pP]3|[mM]4[aA]|[aA][aA][cC]|[wW][aA][vV]))$",
+      "not": { "pattern": "\\n" },
+      "examples": ["media/narration-1.mp3", "media/music.m4a", "https://example.com/audio/lullaby.mp3"]
+    },
+    "videoSrc": {
+      "title": "Video src",
+      "description": "A video file, MP4 with H.264 video and AAC audio: media/… (a file in the package, relative to reel.json) or an https:// URL, at most 2000 characters. A relative path ends in .mp4 (any case); its segments are separated by / and none is empty, \".\" or \"..\"; it has no \\, ?, # or control characters (spaces and other characters are fine, e.g. media/my clip.mp4). An https:// URL must be a valid absolute URL with a host and no spaces or control characters; any path works (a CDN URL without an extension is fine), but the file should be of a listed type. http:// is not allowed.",
+      "$comment": "The \"not\" rejects a newline for regex engines (Python, .NET, PCRE) in which $ also matches before a final newline.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "^(https://[^/?#\\x00-\\x20\\x7F]+([/?#][^\\x00-\\x20\\x7F]*)?|media/(([^/\\\\?#.\\x00-\\x1F\\x7F][^/\\\\?#\\x00-\\x1F\\x7F]*|\\.[^/\\\\?#.\\x00-\\x1F\\x7F][^/\\\\?#\\x00-\\x1F\\x7F]*|\\.\\.[^/\\\\?#\\x00-\\x1F\\x7F]+)/)*[^/\\\\?#\\x00-\\x1F\\x7F]*\\.([mM][pP]4))$",
+      "not": { "pattern": "\\n" },
+      "examples": ["media/waves.mp4", "https://example.com/video/intro.mp4"]
+    },
+    "music": {
+      "title": "Music",
+      "description": "Background music under the whole reel. It loops when it ends and plays across slides.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "src",
-        "duration"
-      ],
+      "required": ["src", "duration"],
       "properties": {
-        "src": {
-          "type": "string",
-          "maxLength": 2000,
-          "description": "audio: media/… (relative to reel.json) or https://… (mp3, m4a, aac, wav)",
-          "pattern": "^(https://.+|media/(?!.*(^|/)\\.{1,2}(/|$))[^\\\\]+\\.(mp3|m4a|aac|wav|MP3|M4A|AAC|WAV))$"
-        },
+        "src": { "description": "The music file: mp3, m4a, aac or wav.", "$ref": "#/$defs/audioSrc" },
         "duration": {
+          "description": "Real length of the music file in seconds, 0.1–86 400. The player needs it to start at the right place when the reel is started or sought mid-way. Get it with: ffprobe -v error -show_entries format=duration -of csv=p=0 music.mp3",
           "type": "number",
           "minimum": 0.1,
           "maximum": 86400
         },
         "volume": {
+          "description": "Volume, 0–1. Default 0.25. Under narration, 0.15–0.3 works well.",
           "type": "number",
           "minimum": 0,
-          "maximum": 1
+          "maximum": 1,
+          "default": 0.25
         },
         "duckTo": {
+          "description": "Volume while an audio clip with duck plays, 0–1. Default 0.08. The music glides down and back up.",
           "type": "number",
           "minimum": 0,
-          "maximum": 1
+          "maximum": 1,
+          "default": 0.08
         }
       }
     },
     "defaults": {
+      "title": "Defaults",
+      "description": "Values used when a slide or layer does not set its own.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "text": {
+          "description": "Defaults for text layers.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
             "style": {
+              "description": "Merged into every text layer's style: player default → defaults.text.style → the layer's style. Set the reel's font, size and caption background here once.",
               "$ref": "#/$defs/textStyle"
             }
           }
         },
         "transition": {
+          "description": "Used by every slide without a transition of its own. Without it, slides fade in over 1 s.",
           "$ref": "#/$defs/transition"
         }
       }
     },
-    "slides": {
-      "type": "array",
-      "minItems": 1,
-      "maxItems": 500,
-      "items": {
-        "$ref": "#/$defs/slide"
-      }
-    }
-  },
-  "$defs": {
-    "color": {
-      "type": "string",
-      "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
-    },
     "transition": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "type"
-          ],
-          "properties": {
-            "type": {
-              "const": "fade"
-            },
-            "duration": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 5
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "type"
-          ],
-          "properties": {
-            "type": {
-              "const": "cut"
-            }
-          }
+      "title": "Transition",
+      "description": "How a slide appears: { \"type\": \"fade\", \"duration\": 1 } or { \"type\": \"cut\" }. The transition is part of the slide's own time: a 1 s fade uses the first second of the slide.",
+      "oneOf": [{ "$ref": "#/$defs/fadeTransition" }, { "$ref": "#/$defs/cutTransition" }],
+      "examples": [{ "type": "fade", "duration": 1 }, { "type": "cut" }]
+    },
+    "fadeTransition": {
+      "title": "Fade",
+      "description": "The slide fades in over the previous one.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "description": "A fade.", "const": "fade" },
+        "duration": {
+          "description": "Seconds, 0–5. Default 1. 0.5–1.5 s feels calm; 0 is the same as a cut.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5
         }
-      ]
+      }
+    },
+    "cutTransition": {
+      "title": "Cut",
+      "description": "The slide appears at once. A cut has no other fields.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": { "type": { "description": "A cut.", "const": "cut" } }
     },
     "textStyle": {
+      "title": "Text style",
+      "description": "How text looks. Merged field by field: player default → defaults.text.style → the layer's style.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "font": {
-          "enum": [
-            "sans",
-            "serif"
-          ]
+          "description": "The device's own sans-serif or serif font; nothing is downloaded. Default sans.",
+          "enum": ["sans", "serif"]
         },
         "size": {
+          "description": "Font size, percent of the canvas height, 1.5–20 (5 ≈ 54 px on a 1080p screen). Default 5. Use ≥ 4.5 for body text read on a TV, 6–9 for titles, 3–3.5 only for short labels.",
           "type": "number",
           "minimum": 1.5,
           "maximum": 20
         },
-        "weight": {
-          "enum": [
-            "regular",
-            "bold"
-          ]
-        },
-        "italic": {
-          "type": "boolean"
-        },
-        "color": {
-          "$ref": "#/$defs/color"
-        },
+        "weight": { "description": "Default regular.", "enum": ["regular", "bold"] },
+        "italic": { "description": "Default false.", "type": "boolean" },
+        "color": { "description": "Text colour. Default #ffffff (white).", "$ref": "#/$defs/color" },
         "background": {
+          "description": "Colour behind the text itself plus padding, e.g. #00000099. Default: none. Gives contrast on busy pictures; for a band across the full width use a shape layer under the text.",
           "$ref": "#/$defs/color"
         },
         "padding": {
+          "description": "Space between the text and its background, percent of the canvas height, 0–10. Default 0. 1–1.5 looks good with a background.",
           "type": "number",
           "minimum": 0,
           "maximum": 10
         },
         "radius": {
+          "description": "Rounded corners of the background, percent of the canvas height, 0–50. Default 0.",
           "type": "number",
           "minimum": 0,
           "maximum": 50
         },
         "lineHeight": {
+          "description": "Line height as a multiple of the font size, 0.8–3. Default 1.25.",
           "type": "number",
           "minimum": 0.8,
           "maximum": 3
         },
         "shadow": {
+          "description": "Soft dark shadow behind the letters, for legibility on pictures. Default true when the style has no background, else false.",
           "type": "boolean"
         }
       }
     },
     "slide": {
+      "title": "Slide",
+      "description": "One page of the reel: layers drawn on the canvas for a number of seconds, and the audio clips played meanwhile.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id",
-        "duration",
-        "layers"
-      ],
+      "required": ["id", "duration", "layers"],
       "properties": {
         "id": {
+          "description": "Name of the slide, 1–80 characters, unique in the reel. Used to jump to the slide and reported when it has been shown.",
           "type": "string",
           "minLength": 1,
-          "maxLength": 80
+          "maxLength": 80,
+          "examples": ["page-1", "title", "credits"]
         },
         "duration": {
+          "description": "How long the slide is shown, in seconds, 1–600, including its transition. With narration: start of the clip + its length + about 1.5 s.",
           "type": "number",
           "minimum": 1,
           "maximum": 600
         },
         "background": {
-          "$ref": "#/$defs/color"
+          "description": "Colour behind all layers. Default #000000.",
+          "$ref": "#/$defs/color",
+          "default": "#000000"
         },
         "transition": {
+          "description": "How this slide appears. Default: defaults.transition, else a 1 s fade.",
           "$ref": "#/$defs/transition"
         },
         "layers": {
+          "description": "1–12 layers, drawn in order: the first is at the back, later layers are on top.",
           "type": "array",
           "minItems": 1,
           "maxItems": 12,
-          "items": {
-            "$ref": "#/$defs/layer"
-          }
+          "items": { "$ref": "#/$defs/layer" }
         },
         "audio": {
+          "description": "0–4 audio clips played during the slide: narration, sound effects, voices. Each must end within the slide.",
           "type": "array",
           "maxItems": 4,
-          "items": {
-            "$ref": "#/$defs/audioClip"
-          }
+          "items": { "$ref": "#/$defs/audioClip" }
         },
         "credit": {
+          "description": "Credit for the slide's pictures or sounds, at most 200 characters, drawn small (1.8 % of the canvas height) in the lower right corner. Keep other text out of that corner.",
           "type": "string",
-          "maxLength": 200
+          "maxLength": 200,
+          "examples": ["Photo: Ingrid Berg"]
         }
       }
     },
     "audioClip": {
+      "title": "Audio clip",
+      "description": "A sound played during a slide: narration, a sound effect, a voice.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "src",
-        "duration"
-      ],
+      "required": ["src", "duration"],
       "properties": {
-        "src": {
-          "type": "string",
-          "maxLength": 2000,
-          "description": "audio: media/… (relative to reel.json) or https://… (mp3, m4a, aac, wav)",
-          "pattern": "^(https://.+|media/(?!.*(^|/)\\.{1,2}(/|$))[^\\\\]+\\.(mp3|m4a|aac|wav|MP3|M4A|AAC|WAV))$"
-        },
+        "src": { "description": "The audio file: mp3, m4a, aac or wav.", "$ref": "#/$defs/audioSrc" },
         "start": {
+          "description": "When the clip starts, seconds from the start of the slide, 0–600. Default 0. 0.5–1 s lets the slide appear first.",
           "type": "number",
           "minimum": 0,
-          "maximum": 600
+          "maximum": 600,
+          "default": 0
         },
         "duration": {
+          "description": "Real length of the audio file in seconds, 0.1–600 (not how long you want it to play). start + duration must be at most the slide's duration (0.05 s tolerance).",
           "type": "number",
           "minimum": 0.1,
           "maximum": 600
         },
         "volume": {
+          "description": "Volume, 0–1. Default 1.",
           "type": "number",
           "minimum": 0,
-          "maximum": 1
+          "maximum": 1,
+          "default": 1
         },
         "duck": {
-          "type": "boolean"
+          "description": "Lower the music to music.duckTo while this clip plays. Default true. Use false for short sound effects.",
+          "type": "boolean",
+          "default": true
         },
         "transcript": {
+          "description": "What is said, at most 2000 characters. Not shown; kept for accessibility and search. Show it on screen with a text layer if wanted.",
           "type": "string",
           "maxLength": 2000
         }
       }
     },
     "layer": {
+      "title": "Layer",
+      "description": "Something drawn on the slide, chosen by \"type\": image, video, text or shape.",
       "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "type",
-            "src"
-          ],
-          "properties": {
-            "type": {
-              "const": "image"
-            },
-            "x": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "y": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "w": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "h": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "start": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "end": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "fadeIn": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "fadeOut": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "opacity": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1
-            },
-            "src": {
-              "type": "string",
-              "maxLength": 2000,
-              "description": "image: media/… (relative to reel.json) or https://… (jpg, jpeg, png, webp, svg, gif)",
-              "pattern": "^(https://.+|media/(?!.*(^|/)\\.{1,2}(/|$))[^\\\\]+\\.(jpg|jpeg|png|webp|svg|gif|JPG|JPEG|PNG|WEBP|SVG|GIF))$"
-            },
-            "fit": {
-              "enum": [
-                "cover",
-                "contain"
-              ]
-            },
-            "alt": {
-              "type": "string",
-              "maxLength": 300
-            },
-            "motion": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "from",
-                "to"
-              ],
-              "properties": {
-                "from": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "properties": {
-                    "scale": {
-                      "type": "number",
-                      "minimum": 1,
-                      "maximum": 2
-                    },
-                    "x": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100
-                    },
-                    "y": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100
-                    }
-                  }
-                },
-                "to": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "properties": {
-                    "scale": {
-                      "type": "number",
-                      "minimum": 1,
-                      "maximum": 2
-                    },
-                    "x": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100
-                    },
-                    "y": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "type",
-            "src",
-            "duration"
-          ],
-          "properties": {
-            "type": {
-              "const": "video"
-            },
-            "x": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "y": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "w": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "h": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "start": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "end": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "fadeIn": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "fadeOut": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "opacity": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1
-            },
-            "src": {
-              "type": "string",
-              "maxLength": 2000,
-              "description": "video: media/… (relative to reel.json) or https://… (mp4)",
-              "pattern": "^(https://.+|media/(?!.*(^|/)\\.{1,2}(/|$))[^\\\\]+\\.(mp4|MP4))$"
-            },
-            "duration": {
-              "type": "number",
-              "minimum": 0.1,
-              "maximum": 86400
-            },
-            "fit": {
-              "enum": [
-                "cover",
-                "contain"
-              ]
-            },
-            "trimStart": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 86400
-            },
-            "muted": {
-              "type": "boolean"
-            },
-            "volume": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1
-            },
-            "loop": {
-              "type": "boolean"
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "type",
-            "text"
-          ],
-          "properties": {
-            "type": {
-              "const": "text"
-            },
-            "x": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "y": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "w": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "h": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "start": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "end": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "fadeIn": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "fadeOut": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "opacity": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1
-            },
-            "text": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 500
-            },
-            "align": {
-              "enum": [
-                "left",
-                "center",
-                "right"
-              ]
-            },
-            "valign": {
-              "enum": [
-                "top",
-                "middle",
-                "bottom"
-              ]
-            },
-            "style": {
-              "$ref": "#/$defs/textStyle"
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "type",
-            "shape"
-          ],
-          "properties": {
-            "type": {
-              "const": "shape"
-            },
-            "x": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "y": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "w": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "h": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "start": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "end": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "fadeIn": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "fadeOut": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 600
-            },
-            "opacity": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1
-            },
-            "shape": {
-              "enum": [
-                "rect",
-                "ellipse"
-              ]
-            },
-            "fill": {
-              "$ref": "#/$defs/color"
-            },
-            "stroke": {
-              "$ref": "#/$defs/color"
-            },
-            "strokeWidth": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 5
-            },
-            "radius": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 50
-            }
-          }
-        }
+        { "$ref": "#/$defs/imageLayer" },
+        { "$ref": "#/$defs/videoLayer" },
+        { "$ref": "#/$defs/textLayer" },
+        { "$ref": "#/$defs/shapeLayer" }
       ]
+    },
+    "imageLayer": {
+      "title": "Image layer",
+      "description": "A picture: jpg, jpeg, png, webp, svg or gif.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "src"],
+      "properties": {
+        "type": { "description": "An image layer.", "const": "image" },
+        "x": {
+          "description": "Left edge of the layer, percent of the canvas width, 0–100. Default 0. Keep text and important details inside 5–95 %.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "y": {
+          "description": "Top edge of the layer, percent of the canvas height, 0–100. Default 0.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "w": {
+          "description": "Width, percent of the canvas width, 0–100. Default 100 (the full width).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "h": {
+          "description": "Height, percent of the canvas height, 0–100. Default 100 (the full height). A box with w : h = 9 : 16 is square on the 16:9 canvas.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "start": {
+          "description": "When the layer appears, seconds from the start of the slide, 0–600. Default 0. Must be less than the slide's duration.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "end": {
+          "description": "When the layer disappears, seconds from the start of the slide, 0–600. Default: the end of the slide. Must be after start and at most the slide's duration (0.05 s tolerance).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "fadeIn": {
+          "description": "Seconds the layer takes to fade in after start, 0–600. Default 0 (appears at once). 0.5–1 s is soft. fadeIn and fadeOut are shortened proportionally if together they are longer than the layer is visible.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "fadeOut": {
+          "description": "Seconds the layer takes to fade out before end, 0–600. Default 0. Usually not needed on layers that last to the end of the slide: the next slide's fade covers them.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "opacity": {
+          "description": "Opacity, 0 (invisible) to 1 (solid). Default 1. 0.3–0.5 dims a background picture under a title.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "src": { "description": "The picture.", "$ref": "#/$defs/imageSrc" },
+        "fit": {
+          "description": "How the picture fills the layer's box: cover fills it and crops what does not fit, contain shows the whole picture with empty space around it. Default cover.",
+          "enum": ["cover", "contain"]
+        },
+        "alt": {
+          "description": "What the picture shows, at most 300 characters. Not drawn; read by screen readers and used for search.",
+          "type": "string",
+          "maxLength": 300,
+          "examples": ["A red fox sitting in the snow"]
+        },
+        "motion": {
+          "description": "A slow zoom and pan while the layer is visible.",
+          "$ref": "#/$defs/motion"
+        }
+      }
+    },
+    "videoLayer": {
+      "title": "Video layer",
+      "description": "A video clip (MP4 with H.264 and AAC). It starts playing when the layer appears.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "src", "duration"],
+      "properties": {
+        "type": { "description": "A video layer.", "const": "video" },
+        "x": {
+          "description": "Left edge of the layer, percent of the canvas width, 0–100. Default 0. Keep text and important details inside 5–95 %.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "y": {
+          "description": "Top edge of the layer, percent of the canvas height, 0–100. Default 0.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "w": {
+          "description": "Width, percent of the canvas width, 0–100. Default 100 (the full width).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "h": {
+          "description": "Height, percent of the canvas height, 0–100. Default 100 (the full height). A box with w : h = 9 : 16 is square on the 16:9 canvas.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "start": {
+          "description": "When the layer appears, seconds from the start of the slide, 0–600. Default 0. Must be less than the slide's duration.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "end": {
+          "description": "When the layer disappears, seconds from the start of the slide, 0–600. Default: the end of the slide. Must be after start and at most the slide's duration (0.05 s tolerance).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "fadeIn": {
+          "description": "Seconds the layer takes to fade in after start, 0–600. Default 0 (appears at once). 0.5–1 s is soft. fadeIn and fadeOut are shortened proportionally if together they are longer than the layer is visible.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "fadeOut": {
+          "description": "Seconds the layer takes to fade out before end, 0–600. Default 0. Usually not needed on layers that last to the end of the slide: the next slide's fade covers them.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "opacity": {
+          "description": "Opacity, 0 (invisible) to 1 (solid). Default 1. 0.3–0.5 dims a background picture under a title.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "src": { "description": "The video file: mp4.", "$ref": "#/$defs/videoSrc" },
+        "duration": {
+          "description": "Real length of the video file in seconds, 0.1–86 400.",
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 86400
+        },
+        "fit": {
+          "description": "How the picture fills the layer's box: cover fills it and crops what does not fit, contain shows the whole picture with empty space around it. Default cover.",
+          "enum": ["cover", "contain"]
+        },
+        "trimStart": {
+          "description": "Seconds into the clip to start from, 0–86 400, less than duration. Default 0.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 86400
+        },
+        "muted": {
+          "description": "Play without sound. Default true when the slide has audio clips, else false.",
+          "type": "boolean"
+        },
+        "volume": {
+          "description": "Volume of the clip's own sound, 0–1. Default 1.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "loop": {
+          "description": "Start again from trimStart when the clip ends. Default false: the last frame stays on screen.",
+          "type": "boolean"
+        }
+      }
+    },
+    "textLayer": {
+      "title": "Text layer",
+      "description": "Plain text in a box. Without h the box grows with the text.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "text"],
+      "properties": {
+        "type": { "description": "A text layer.", "const": "text" },
+        "x": {
+          "description": "Left edge of the layer, percent of the canvas width, 0–100. Default 0. Keep text and important details inside 5–95 %.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "y": {
+          "description": "Top edge of the layer, percent of the canvas height, 0–100. Default 0.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "w": {
+          "description": "Width, percent of the canvas width, 0–100. Default 100 (the full width).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "h": {
+          "description": "Height, percent of the canvas height, 0–100. Default: none – the text box grows downward from y with its content (leave room for every line). With h, valign places the text inside the box.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "start": {
+          "description": "When the layer appears, seconds from the start of the slide, 0–600. Default 0. Must be less than the slide's duration.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "end": {
+          "description": "When the layer disappears, seconds from the start of the slide, 0–600. Default: the end of the slide. Must be after start and at most the slide's duration (0.05 s tolerance).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "fadeIn": {
+          "description": "Seconds the layer takes to fade in after start, 0–600. Default 0 (appears at once). 0.5–1 s is soft. fadeIn and fadeOut are shortened proportionally if together they are longer than the layer is visible.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "fadeOut": {
+          "description": "Seconds the layer takes to fade out before end, 0–600. Default 0. Usually not needed on layers that last to the end of the slide: the next slide's fade covers them.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "opacity": {
+          "description": "Opacity, 0 (invisible) to 1 (solid). Default 1. 0.3–0.5 dims a background picture under a title.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "text": {
+          "description": "Plain text, 1–500 characters; \\n is a line break. Never interpreted as HTML or Markdown. Keep a caption to 2–3 lines.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "examples": ["Once upon a time, a little fox lived at the edge of the forest."]
+        },
+        "align": {
+          "description": "Horizontal alignment of the text in its box. Default left.",
+          "enum": ["left", "center", "right"]
+        },
+        "valign": {
+          "description": "Vertical alignment of the text in its box. Default top. Only has an effect when the layer has h.",
+          "enum": ["top", "middle", "bottom"]
+        },
+        "style": {
+          "description": "This layer's text style, merged over defaults.text.style.",
+          "$ref": "#/$defs/textStyle"
+        }
+      }
+    },
+    "shapeLayer": {
+      "title": "Shape layer",
+      "description": "A rectangle or ellipse filling the layer's box: a caption band, a coloured card, a ring that points something out.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "shape"],
+      "properties": {
+        "type": { "description": "A shape layer.", "const": "shape" },
+        "x": {
+          "description": "Left edge of the layer, percent of the canvas width, 0–100. Default 0. Keep text and important details inside 5–95 %.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "y": {
+          "description": "Top edge of the layer, percent of the canvas height, 0–100. Default 0.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "w": {
+          "description": "Width, percent of the canvas width, 0–100. Default 100 (the full width).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "h": {
+          "description": "Height, percent of the canvas height, 0–100. Default 100 (the full height). A box with w : h = 9 : 16 is square on the 16:9 canvas.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "start": {
+          "description": "When the layer appears, seconds from the start of the slide, 0–600. Default 0. Must be less than the slide's duration.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "end": {
+          "description": "When the layer disappears, seconds from the start of the slide, 0–600. Default: the end of the slide. Must be after start and at most the slide's duration (0.05 s tolerance).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "fadeIn": {
+          "description": "Seconds the layer takes to fade in after start, 0–600. Default 0 (appears at once). 0.5–1 s is soft. fadeIn and fadeOut are shortened proportionally if together they are longer than the layer is visible.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "fadeOut": {
+          "description": "Seconds the layer takes to fade out before end, 0–600. Default 0. Usually not needed on layers that last to the end of the slide: the next slide's fade covers them.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "opacity": {
+          "description": "Opacity, 0 (invisible) to 1 (solid). Default 1. 0.3–0.5 dims a background picture under a title.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "shape": {
+          "description": "rect or ellipse. A shape with w : h = 9 : 16 is a square or circle on the 16:9 canvas.",
+          "enum": ["rect", "ellipse"]
+        },
+        "fill": { "description": "Fill colour. Default: none (transparent).", "$ref": "#/$defs/color" },
+        "stroke": {
+          "description": "Outline colour. Default: none. Drawn only when strokeWidth is more than 0.",
+          "$ref": "#/$defs/color"
+        },
+        "strokeWidth": {
+          "description": "Outline width, percent of the canvas height, 0–5. Default 0. 0.4–0.8 gives a clear line.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "radius": {
+          "description": "Rounded corners of a rect, percent of the canvas height, 0–50. Default 0. Not used by ellipse.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 50
+        }
+      }
+    },
+    "motion": {
+      "title": "Motion",
+      "description": "A slow zoom and pan through the time the layer is visible, from \"from\" to \"to\". Both are required; { \"scale\": 1 } is the picture as it is.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": {
+          "description": "Zoom and focus point when the layer appears.",
+          "$ref": "#/$defs/motionPoint"
+        },
+        "to": {
+          "description": "Zoom and focus point when the layer disappears.",
+          "$ref": "#/$defs/motionPoint"
+        }
+      },
+      "examples": [{ "from": { "scale": 1 }, "to": { "scale": 1.15, "x": 40, "y": 60 } }]
+    },
+    "motionPoint": {
+      "title": "Motion point",
+      "description": "A zoom level and the point zoomed towards.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scale": {
+          "description": "Zoom, 1–2: 1 is the picture as fitted, 2 is twice as large. Default 1. 1 → 1.1–1.2 over a slide is a calm zoom.",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "x": {
+          "description": "The point zoomed towards, percent of the picture's width as shown in the layer's box (with cover, the visible part), 0–100. Default 50, the centre.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "y": {
+          "description": "The point zoomed towards, percent of the picture's height as shown in the layer's box (with cover, the visible part), 0–100. Default 50, the centre.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
     }
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "reel-format",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Reel 1.0 for Node and browsers: TypeScript types, validation and resolving for reel/1 documents, and reading/writing .zip reel packages. No DOM, no dependencies.",
   "license": "MIT",
   "author": "davidtoska",
@@ -24,7 +24,7 @@
     "package"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20.12"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

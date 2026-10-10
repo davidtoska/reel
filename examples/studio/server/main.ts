@@ -13,7 +13,7 @@ import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { dirname, join, normalize, sep } from 'node:path';
 import { handleApi } from './api.ts';
-import { HttpError, sendFile, sendJson } from './http.ts';
+import { HttpError, decodePath, sendFile, sendJson } from './http.ts';
 import { seedIfEmpty } from './seed.ts';
 import { DATA_DIR, LIBRARY_DIR, STUDIO_DIR } from './store.ts';
 
@@ -25,7 +25,7 @@ const VENDOR = { 'reel-format': dirname(require.resolve('reel-format')), 'reel-p
 
 /** Joins a URL path onto a folder, refusing anything that escapes it. */
 const inside = (root: string, urlPath: string) => {
-  const path = normalize(join(root, decodeURIComponent(urlPath)));
+  const path = normalize(join(root, decodePath(urlPath)));
   if (path !== root && !path.startsWith(root.endsWith(sep) ? root : root + sep)) throw new HttpError(403, 'Forbidden');
   return path;
 };
@@ -38,8 +38,10 @@ const server = createServer(async (req, res) => {
   res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
 
-  const path = new URL(req.url ?? '/', 'http://x').pathname;
   try {
+    // Inside the try: a request target like http://[ makes URL throw, and that must not crash the server.
+    const path = URL.parse(req.url ?? '/', 'http://x')?.pathname;
+    if (path === undefined) throw new HttpError(400, 'Bad URL');
     if (path === '/api' || path.startsWith('/api/')) return await handleApi(req, res, path);
     if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'Method not allowed');
     if (path.startsWith('/reels/')) return await sendFile(req, res, inside(DATA_DIR, path.slice('/reels/'.length)), { untrusted: true });

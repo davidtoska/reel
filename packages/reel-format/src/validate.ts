@@ -1,6 +1,9 @@
 // Checks a document against Reel 1.0. Accepts anything (it usually arrives as JSON from elsewhere)
 // and returns every problem with the path to the field, e.g.
-//   slides[1].audio[0]: ends after the slide: start + duration = 13.4 s, but the slide lasts 12 s
+//   slides[1].audio[0]: ends after the slide: start + duration = 13.4 s, but the slide lasts 12 s – …
+//
+// It checks everything the JSON Schema in reel-schema checks, plus the rules a schema cannot express
+// (times within the slide, unique slide ids, https URLs that parse, %2e dot segments in paths).
 
 import { REEL_FORMAT, REEL_MEDIA_DIR, REEL_MEDIA_TYPES, type Reel } from './format.ts';
 
@@ -9,7 +12,34 @@ export type ValidationResult = { ok: true; reel: Reel; errors: [] } | { ok: fals
 /** Times may exceed the slide by this much (rounding in authoring tools). */
 const TOLERANCE = 0.05;
 const COLOR = /^#([0-9a-f]{6}|[0-9a-f]{8})$/i;
+const SHORT_COLOR = /^#[0-9a-f]{3,4}$/i;
 const LAYER_TYPES = ['image', 'video', 'text', 'shape'];
+const TRANSITION_SHAPE = 'must be an object like { "type": "fade", "duration": 1 } or { "type": "cut" }';
+
+/** The same shape the JSON Schema requires of an https src: a host, then nothing that is white space. */
+// Spaces and control characters are spelled out instead of \s, which means different things in different
+// regex engines; the JSON Schema uses the same class, so Go, Java and Python agree with this check.
+const HTTPS = /^https:\/\/[^/?#\x00-\x20\x7F]+([/?#][^\x00-\x20\x7F]*)?$/;
+const CONTROL = /[\u0000-\u001f\u007f]/;
+/** `.` and `..`, also percent-encoded: URL parsers treat `%2e%2e` as `..`. */
+const DOT_SEGMENT = /^(\.|%2e){1,2}$/i;
+
+// The fields each object may have. Anything else is an error, so a misspelled field is reported
+// instead of being ignored by the player.
+const REEL_FIELDS = ['$schema', 'format', 'title', 'description', 'language', 'tags', 'music', 'defaults', 'slides'];
+const MUSIC_FIELDS = ['src', 'duration', 'volume', 'duckTo'];
+const TEXT_STYLE_FIELDS = ['font', 'size', 'weight', 'italic', 'color', 'background', 'padding', 'radius', 'lineHeight', 'shadow'];
+const SLIDE_FIELDS = ['id', 'duration', 'background', 'transition', 'layers', 'audio', 'credit'];
+const AUDIO_FIELDS = ['src', 'start', 'duration', 'volume', 'duck', 'transcript'];
+const LAYER_BASE_FIELDS = ['type', 'x', 'y', 'w', 'h', 'start', 'end', 'fadeIn', 'fadeOut', 'opacity'];
+const LAYER_FIELDS: Record<string, string[]> = {
+  image: [...LAYER_BASE_FIELDS, 'src', 'fit', 'alt', 'motion'],
+  video: [...LAYER_BASE_FIELDS, 'src', 'duration', 'fit', 'trimStart', 'muted', 'volume', 'loop'],
+  text: [...LAYER_BASE_FIELDS, 'text', 'align', 'valign', 'style'],
+  shape: [...LAYER_BASE_FIELDS, 'shape', 'fill', 'stroke', 'strokeWidth', 'radius'],
+};
+const MOTION_POINT_FIELDS = ['scale', 'x', 'y'];
+const EXAMPLE_SRC = { image: 'media/photo.jpg', audio: 'media/voice.mp3', video: 'media/clip.mp4' };
 
 type Kind = keyof typeof REEL_MEDIA_TYPES;
 
@@ -20,19 +50,60 @@ export const extensionOf = (src: string) => {
   return dot > path.lastIndexOf('/') ? path.slice(dot + 1).toLowerCase() : '';
 };
 
-/** Problem with a media reference, or null. Relative paths must be clean paths under media/. */
+/** Length in Unicode code points, as JSON Schema's maxLength counts (an emoji is 1, not 2). */
+const codePoints = (s: string) => [...s].length;
+
+/** Number of single-character edits (insert, delete, replace, swap two neighbours) between two short strings. */
+const distance = (a: string, b: string) => {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_, j) => (i ? (j ? 0 : i) : j)));
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  }
+  return d[a.length][b.length];
+};
+
+/**
+ * The known field an unknown one was probably meant to be: equal but for case, or at most 2 edits
+ * away. Short names allow fewer edits (one per 3 letters), so `id` does not suggest `end`.
+ */
+const closest = (name: string, known: readonly string[]) => {
+  const n = name.toLowerCase();
+  let best: string | undefined;
+  let bestDistance = Infinity;
+  for (const k of known) {
+    if (Math.abs(k.length - n.length) > 2) continue;
+    const d = distance(n, k.toLowerCase());
+    if (d < bestDistance && d <= Math.min(2, Math.floor(Math.max(n.length, k.length) / 3))) { best = k; bestDistance = d; }
+  }
+  return best;
+};
+
+/** Problem with an https:// src, or null. It must be a URL that parses and has a host; any path is fine. */
+const httpsProblem = (src: string) => {
+  if (/[\x00-\x20\x7F]/.test(src)) return 'must be a valid https:// URL – no spaces, line breaks or control characters (write a space as %20)';
+  let url: URL | undefined;
+  try { url = new URL(src); } catch { /* reported below */ }
+  return HTTPS.test(src) && url?.protocol === 'https:' && url.host ? null : 'must be a valid https:// URL';
+};
+
+/**
+ * Problem with a media reference, or null. Either an https:// URL, or a clean relative path under
+ * media/ that ends in an extension listed in REEL_MEDIA_TYPES for the kind.
+ */
 export const checkMediaSrc = (src: unknown, kind: Kind): string | null => {
   if (typeof src !== 'string' || !src) return 'required';
-  if (src.length > 2000) return 'at most 2000 characters';
-  if (src.startsWith('https://')) {
-    const ext = extensionOf(src);
-    return ext && !(ext in REEL_MEDIA_TYPES[kind]) ? `.${ext} is not a ${kind} type – use ${Object.keys(REEL_MEDIA_TYPES[kind]).join(', ')}` : null;
+  if (src.length > 2000 && codePoints(src) > 2000) return 'at most 2000 characters';
+  if (src.startsWith('https://')) return httpsProblem(src);
+  if (/^https?:/i.test(src)) return `must start with ${REEL_MEDIA_DIR} or https:// – use https://`;
+  if (!src.startsWith(REEL_MEDIA_DIR)) return `must start with ${REEL_MEDIA_DIR} or https:// – put the file under ${REEL_MEDIA_DIR} (e.g. ${EXAMPLE_SRC[kind]})`;
+  if (/[?#\\]/.test(src) || CONTROL.test(src) || src.split('/').some(p => p === '' || DOT_SEGMENT.test(p))) {
+    return 'must be a clean relative path (no .., . or empty parts, no \\, ?, # or control characters)';
   }
-  if (!src.startsWith(REEL_MEDIA_DIR)) return `must start with ${REEL_MEDIA_DIR} or https://`;
-  const parts = src.split('/');
-  if (src.includes('\\') || parts.some(p => p === '' || p === '.' || p === '..')) return 'must be a clean relative path (no .., \\ or empty parts)';
   const ext = extensionOf(src);
-  if (!(ext in REEL_MEDIA_TYPES[kind])) return `.${ext || '(none)'} is not a ${kind} type – use ${Object.keys(REEL_MEDIA_TYPES[kind]).join(', ')}`;
+  if (!Object.hasOwn(REEL_MEDIA_TYPES[kind], ext)) return `.${ext || '(none)'} is not ${kind === 'image' ? 'an' : 'a'} ${kind} type – use ${Object.keys(REEL_MEDIA_TYPES[kind]).join(', ')}`;
   return null;
 };
 
@@ -48,21 +119,44 @@ export const validateReel = (input: unknown): ValidationResult => {
   const str = (v: unknown, max: number, path: string, required = false) => {
     if (v === undefined || v === '') { if (required) err(path, 'required'); return; }
     if (typeof v !== 'string') err(path, 'must be text');
-    else if (v.length > max) err(path, `at most ${max} characters`);
+    else if (v.length > max && codePoints(v) > max) err(path, `at most ${max} characters`);
   };
   const bool = (v: unknown, path: string) => { if (v !== undefined && typeof v !== 'boolean') err(path, 'must be true or false'); };
-  const color = (v: unknown, path: string) => { if (v !== undefined && (typeof v !== 'string' || !COLOR.test(v))) err(path, 'must be #rrggbb or #rrggbbaa'); };
+  const color = (v: unknown, path: string) => {
+    if (v === undefined || (typeof v === 'string' && COLOR.test(v))) return;
+    const long = typeof v === 'string' && SHORT_COLOR.test(v) ? `#${[...v.slice(1)].map(c => c + c).join('')}` : '';
+    err(path, `must be #rrggbb or #rrggbbaa${long ? ` – use "${long}"` : ''}`);
+  };
   const oneOf = (v: unknown, values: string[], path: string) => { if (v !== undefined && !values.includes(v as string)) err(path, `must be ${values.join(' or ')}`); };
   const media = (v: unknown, kind: Kind, path: string) => { const p = checkMediaSrc(v, kind); if (p) err(path, p); };
+  /** Reports fields the object may not have. Fields set to undefined count as left out (JSON has no undefined). */
+  let hints = 0; // "did you mean" is only worked out for the first few unknown fields, so huge documents stay fast
+  const fields = (v: Record<string, unknown>, known: readonly string[], path: string) => {
+    for (const k of Object.keys(v)) {
+      if (v[k] === undefined || known.includes(k)) continue;
+      const near = hints++ < 20 ? closest(k, known) : undefined;
+      err(path, `unknown field ${JSON.stringify(k)}${near ? ` – did you mean ${JSON.stringify(near)}?` : ''}`);
+    }
+  };
+  /** Checks every item of a list. Holes (sparse arrays built in JS) are reported, not skipped. */
+  const each = (list: unknown[], path: string, check: (v: unknown, path: string) => void) => {
+    for (let i = 0; i < list.length; i++) {
+      if (Object.hasOwn(list, i)) check(list[i], `${path}[${i}]`);
+      else err(`${path}[${i}]`, 'missing');
+    }
+  };
   const transition = (v: unknown, path: string) => {
     if (v === undefined) return;
-    if (!isObj(v)) return err(path, 'must be an object');
-    oneOf(v.type, ['fade', 'cut'], `${path}.type`);
-    if (v.type === 'fade') num(v.duration, 0, 5, `${path}.duration`);
+    if (!isObj(v)) return err(path, TRANSITION_SHAPE);
+    fields(v, v.type === 'cut' ? ['type'] : ['type', 'duration'], path);
+    if (v.type === undefined) err(`${path}.type`, 'required – fade or cut');
+    else oneOf(v.type, ['fade', 'cut'], `${path}.type`);
+    if (v.type !== 'cut') num(v.duration, 0, 5, `${path}.duration`);
   };
   const textStyle = (v: unknown, path: string) => {
     if (v === undefined) return;
     if (!isObj(v)) return err(path, 'must be an object');
+    fields(v, TEXT_STYLE_FIELDS, path);
     oneOf(v.font, ['sans', 'serif'], `${path}.font`);
     num(v.size, 1.5, 20, `${path}.size`);
     oneOf(v.weight, ['regular', 'bold'], `${path}.weight`);
@@ -77,17 +171,22 @@ export const validateReel = (input: unknown): ValidationResult => {
 
   if (!isObj(input)) return { ok: false, errors: ['document: must be a JSON object'] };
   const d = input;
+  // `$schema` is not part of the format; it is allowed so editors can offer autocompletion, and ignored.
+  fields(d, REEL_FIELDS, 'document');
+  if (d.$schema !== undefined && typeof d.$schema !== 'string') err('$schema', 'must be text');
   if (d.format !== REEL_FORMAT) err('format', `must be "${REEL_FORMAT}"`);
   str(d.title, 120, 'title', true);
   str(d.description, 500, 'description');
   str(d.language, 35, 'language');
   if (d.tags !== undefined) {
-    if (!Array.isArray(d.tags) || d.tags.length > 20) err('tags', 'at most 20 tags');
-    else d.tags.forEach((t, i) => str(t, 40, `tags[${i}]`, true));
+    if (!Array.isArray(d.tags)) err('tags', 'must be a list of texts');
+    else if (d.tags.length > 20) err('tags', 'at most 20 tags');
+    else each(d.tags, 'tags', (t, p) => str(t, 40, p, true));
   }
   if (d.music !== undefined) {
     if (!isObj(d.music)) err('music', 'must be an object');
     else {
+      fields(d.music, MUSIC_FIELDS, 'music');
       media(d.music.src, 'audio', 'music.src');
       num(d.music.duration, 0.1, 86_400, 'music.duration', true);
       num(d.music.volume, 0, 1, 'music.volume');
@@ -97,9 +196,13 @@ export const validateReel = (input: unknown): ValidationResult => {
   if (d.defaults !== undefined) {
     if (!isObj(d.defaults)) err('defaults', 'must be an object');
     else {
+      fields(d.defaults, ['text', 'transition'], 'defaults');
       if (d.defaults.text !== undefined) {
         if (!isObj(d.defaults.text)) err('defaults.text', 'must be an object');
-        else textStyle(d.defaults.text.style, 'defaults.text.style');
+        else {
+          fields(d.defaults.text, ['style'], 'defaults.text');
+          textStyle(d.defaults.text.style, 'defaults.text.style');
+        }
       }
       transition(d.defaults.transition, 'defaults.transition');
     }
@@ -110,9 +213,9 @@ export const validateReel = (input: unknown): ValidationResult => {
     return { ok: false, errors };
   }
   const ids = new Set<string>();
-  d.slides.forEach((s: unknown, i) => {
-    const p = `slides[${i}]`;
+  each(d.slides, 'slides', (s, p) => {
     if (!isObj(s)) return err(p, 'must be an object');
+    fields(s, SLIDE_FIELDS, p);
     str(s.id, 80, `${p}.id`, true);
     if (typeof s.id === 'string') {
       if (ids.has(s.id)) err(`${p}.id`, `"${s.id}" is used by an earlier slide`);
@@ -125,10 +228,10 @@ export const validateReel = (input: unknown): ValidationResult => {
     str(s.credit, 200, `${p}.credit`);
 
     if (!Array.isArray(s.layers) || s.layers.length < 1 || s.layers.length > 12) err(`${p}.layers`, 'must be a list of 1–12 layers');
-    else s.layers.forEach((l: unknown, j) => {
-      const q = `${p}.layers[${j}]`;
+    else each(s.layers, `${p}.layers`, (l, q) => {
       if (!isObj(l)) return err(q, 'must be an object');
       if (!LAYER_TYPES.includes(l.type as string)) return err(`${q}.type`, `must be ${LAYER_TYPES.join(', ')}`);
+      fields(l, LAYER_FIELDS[l.type as string], q);
       for (const k of ['x', 'y', 'w', 'h']) num(l[k], 0, 100, `${q}.${k}`);
       num(l.start, 0, 600, `${q}.start`);
       num(l.end, 0, 600, `${q}.end`);
@@ -138,7 +241,8 @@ export const validateReel = (input: unknown): ValidationResult => {
       const start = typeof l.start === 'number' ? l.start : 0;
       const end = typeof l.end === 'number' ? l.end : D;
       if (start >= D) err(`${q}.start`, `must be less than the slide's duration (${D} s)`);
-      if (end <= start) err(`${q}.end`, 'must be after start');
+      // Without end the layer lasts to the end of the slide, and start ≥ duration is reported above.
+      if (typeof l.end === 'number' && end <= start) err(`${q}.end`, 'must be after start');
       if (end > D + TOLERANCE) err(`${q}.end`, `is after the end of the slide (${D} s)`);
 
       if (l.type === 'image') {
@@ -146,9 +250,11 @@ export const validateReel = (input: unknown): ValidationResult => {
         oneOf(l.fit, ['cover', 'contain'], `${q}.fit`);
         str(l.alt, 300, `${q}.alt`);
         if (l.motion !== undefined) {
+          if (isObj(l.motion)) fields(l.motion, ['from', 'to'], `${q}.motion`);
           if (!isObj(l.motion) || !isObj(l.motion.from) || !isObj(l.motion.to)) err(`${q}.motion`, 'needs both from and to');
           else for (const end of ['from', 'to'] as const) {
             const m = l.motion[end] as Record<string, unknown>;
+            fields(m, MOTION_POINT_FIELDS, `${q}.motion.${end}`);
             num(m.scale, 1, 2, `${q}.motion.${end}.scale`);
             num(m.x, 0, 100, `${q}.motion.${end}.x`);
             num(m.y, 0, 100, `${q}.motion.${end}.y`);
@@ -180,9 +286,9 @@ export const validateReel = (input: unknown): ValidationResult => {
 
     if (s.audio !== undefined) {
       if (!Array.isArray(s.audio) || s.audio.length > 4) err(`${p}.audio`, 'must be a list of at most 4 clips');
-      else s.audio.forEach((a: unknown, j) => {
-        const q = `${p}.audio[${j}]`;
+      else each(s.audio, `${p}.audio`, (a, q) => {
         if (!isObj(a)) return err(q, 'must be an object');
+        fields(a, AUDIO_FIELDS, q);
         media(a.src, 'audio', `${q}.src`);
         num(a.start, 0, 600, `${q}.start`);
         num(a.duration, 0.1, 600, `${q}.duration`, true);
@@ -190,7 +296,7 @@ export const validateReel = (input: unknown): ValidationResult => {
         bool(a.duck, `${q}.duck`);
         str(a.transcript, 2000, `${q}.transcript`);
         const ends = (typeof a.start === 'number' ? a.start : 0) + (typeof a.duration === 'number' ? a.duration : 0);
-        if (ends > D + TOLERANCE) err(q, `ends after the slide: start + duration = ${+ends.toFixed(2)} s, but the slide lasts ${D} s`);
+        if (ends > D + TOLERANCE) err(q, `ends after the slide: start + duration = ${+ends.toFixed(2)} s, but the slide lasts ${D} s – make the slide longer or start the clip earlier`);
       });
     }
   });
