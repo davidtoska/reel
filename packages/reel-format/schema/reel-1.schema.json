@@ -1,0 +1,652 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/reel-format@1/schema/reel-1.schema.json",
+  "title": "Reel 1.0",
+  "description": "A reel: slides with timed layers (image, video, text, shape), audio clips and music on a 16:9 canvas. Positions and sizes are percent of the canvas; times are seconds from the start of the slide. Rules that depend on other fields (times within the slide, unique slide ids) are checked by validateReel() in the reel-format package.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "title",
+    "slides"
+  ],
+  "properties": {
+    "format": {
+      "const": "reel/1"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "language": {
+      "type": "string",
+      "maxLength": 35
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40
+      }
+    },
+    "music": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "src",
+        "duration"
+      ],
+      "properties": {
+        "src": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "audio: media/… (relative to reel.json) or https://… (mp3, m4a, aac, wav)",
+          "pattern": "^(https://.+|media/(?!.*(^|/)\\.{1,2}(/|$))[^\\\\]+\\.(mp3|m4a|aac|wav|MP3|M4A|AAC|WAV))$"
+        },
+        "duration": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 86400
+        },
+        "volume": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "duckTo": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "style": {
+              "$ref": "#/$defs/textStyle"
+            }
+          }
+        },
+        "transition": {
+          "$ref": "#/$defs/transition"
+        }
+      }
+    },
+    "slides": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/$defs/slide"
+      }
+    }
+  },
+  "$defs": {
+    "color": {
+      "type": "string",
+      "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
+    },
+    "transition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "fade"
+            },
+            "duration": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 5
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "cut"
+            }
+          }
+        }
+      ]
+    },
+    "textStyle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "font": {
+          "enum": [
+            "sans",
+            "serif"
+          ]
+        },
+        "size": {
+          "type": "number",
+          "minimum": 1.5,
+          "maximum": 20
+        },
+        "weight": {
+          "enum": [
+            "regular",
+            "bold"
+          ]
+        },
+        "italic": {
+          "type": "boolean"
+        },
+        "color": {
+          "$ref": "#/$defs/color"
+        },
+        "background": {
+          "$ref": "#/$defs/color"
+        },
+        "padding": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "lineHeight": {
+          "type": "number",
+          "minimum": 0.8,
+          "maximum": 3
+        },
+        "shadow": {
+          "type": "boolean"
+        }
+      }
+    },
+    "slide": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "duration",
+        "layers"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "duration": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 600
+        },
+        "background": {
+          "$ref": "#/$defs/color"
+        },
+        "transition": {
+          "$ref": "#/$defs/transition"
+        },
+        "layers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/layer"
+          }
+        },
+        "audio": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/audioClip"
+          }
+        },
+        "credit": {
+          "type": "string",
+          "maxLength": 200
+        }
+      }
+    },
+    "audioClip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "src",
+        "duration"
+      ],
+      "properties": {
+        "src": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "audio: media/… (relative to reel.json) or https://… (mp3, m4a, aac, wav)",
+          "pattern": "^(https://.+|media/(?!.*(^|/)\\.{1,2}(/|$))[^\\\\]+\\.(mp3|m4a|aac|wav|MP3|M4A|AAC|WAV))$"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "duration": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 600
+        },
+        "volume": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "duck": {
+          "type": "boolean"
+        },
+        "transcript": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    },
+    "layer": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "src"
+          ],
+          "properties": {
+            "type": {
+              "const": "image"
+            },
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "w": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "h": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "start": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "end": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "fadeIn": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "fadeOut": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "opacity": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "src": {
+              "type": "string",
+              "maxLength": 2000,
+              "description": "image: media/… (relative to reel.json) or https://… (jpg, jpeg, png, webp, svg, gif)",
+              "pattern": "^(https://.+|media/(?!.*(^|/)\\.{1,2}(/|$))[^\\\\]+\\.(jpg|jpeg|png|webp|svg|gif|JPG|JPEG|PNG|WEBP|SVG|GIF))$"
+            },
+            "fit": {
+              "enum": [
+                "cover",
+                "contain"
+              ]
+            },
+            "alt": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "motion": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "from",
+                "to"
+              ],
+              "properties": {
+                "from": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "scale": {
+                      "type": "number",
+                      "minimum": 1,
+                      "maximum": 2
+                    },
+                    "x": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "y": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    }
+                  }
+                },
+                "to": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "scale": {
+                      "type": "number",
+                      "minimum": 1,
+                      "maximum": 2
+                    },
+                    "x": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "y": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "src",
+            "duration"
+          ],
+          "properties": {
+            "type": {
+              "const": "video"
+            },
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "w": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "h": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "start": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "end": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "fadeIn": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "fadeOut": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "opacity": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "src": {
+              "type": "string",
+              "maxLength": 2000,
+              "description": "video: media/… (relative to reel.json) or https://… (mp4)",
+              "pattern": "^(https://.+|media/(?!.*(^|/)\\.{1,2}(/|$))[^\\\\]+\\.(mp4|MP4))$"
+            },
+            "duration": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 86400
+            },
+            "fit": {
+              "enum": [
+                "cover",
+                "contain"
+              ]
+            },
+            "trimStart": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 86400
+            },
+            "muted": {
+              "type": "boolean"
+            },
+            "volume": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "loop": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "text"
+          ],
+          "properties": {
+            "type": {
+              "const": "text"
+            },
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "w": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "h": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "start": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "end": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "fadeIn": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "fadeOut": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "opacity": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "align": {
+              "enum": [
+                "left",
+                "center",
+                "right"
+              ]
+            },
+            "valign": {
+              "enum": [
+                "top",
+                "middle",
+                "bottom"
+              ]
+            },
+            "style": {
+              "$ref": "#/$defs/textStyle"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "shape"
+          ],
+          "properties": {
+            "type": {
+              "const": "shape"
+            },
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "w": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "h": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "start": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "end": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "fadeIn": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "fadeOut": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "opacity": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "shape": {
+              "enum": [
+                "rect",
+                "ellipse"
+              ]
+            },
+            "fill": {
+              "$ref": "#/$defs/color"
+            },
+            "stroke": {
+              "$ref": "#/$defs/color"
+            },
+            "strokeWidth": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 5
+            },
+            "radius": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 50
+            }
+          }
+        }
+      ]
+    }
+  }
+}

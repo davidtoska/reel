@@ -1,0 +1,7 @@
+node_modules/
+dist/
+examples/studio/data/
+examples/studio/web/public/app/
+*.tgz
+.idea/
+.claude/

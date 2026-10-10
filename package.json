@@ -1,0 +1,19 @@
+{
+  "name": "reel-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w reel-format && npm run build -w reel-studio",
+    "typecheck": "npm run typecheck -w reel-format && npm run typecheck -w reel-studio",
+    "dev": "npm run dev -w reel-studio",
+    "start": "npm run start -w reel-studio"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^5.9.0"
+  }
+}

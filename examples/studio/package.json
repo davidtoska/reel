@@ -1,0 +1,18 @@
+{
+  "name": "reel-studio",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Example app for Reel: an open HTTP API (for scripts and AI agents) and a visual builder (for people) that create, edit and publish reels.",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "reel-format": "*"
+  },
+  "scripts": {
+    "build": "tsc -p web/tsconfig.json",
+    "start": "node server/main.ts",
+    "dev": "tsc -p web/tsconfig.json --watch --preserveWatchOutput & node --watch server/main.ts",
+    "typecheck": "tsc -p server/tsconfig.json && tsc -p web/tsconfig.json --noEmit",
+    "media": "python3 scripts/generate_media.py"
+  }
+}
