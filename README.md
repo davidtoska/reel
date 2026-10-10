@@ -293,33 +293,29 @@ npm test
 
 ## Releasing
 
-Packages are published to npm by GitHub Actions ([`publish.yml`](.github/workflows/publish.yml)) with
-trusted publishing – no npm token is stored anywhere. Publishing a GitHub release starts the workflow.
-It builds, type-checks and tests everything, then publishes each package whose version is not on npm
-yet, in dependency order, so one release can contain one, two or all three packages.
+One command makes a real release – a GitHub release and the packages on npm:
 
-1. Add the release to [`CHANGELOG.md`](CHANGELOG.md) under a heading with its version and date
-   (`## 1.0.2 – 2026-11-02`), with a sub-heading for each package that changed.
-2. Bump the packages that changed. If `reel-format` changed, release `reel-player` too and raise its
-   dependency on `reel-format` to the new version – `npm version` does not do that, and with the old
-   range, users who already have the old `reel-format` keep it.
-3. Commit, push, and create the release with its changelog section as the notes
-   (`--generate-notes` would give nearly empty notes here: there are no pull requests).
+1. Write what changed under `## Unreleased` at the top of [`CHANGELOG.md`](CHANGELOG.md). Those lines
+   become the release notes. Commit and push.
+2. Run one of:
 
-For example, a release of `reel-format` and `reel-player` 1.0.2:
+   ```bash
+   npm run release -- patch     # bug fixes and docs:          1.0.1 → 1.0.2
+   npm run release -- minor     # new things, nothing breaks:  1.0.1 → 1.1.0
+   npm run release -- major     # breaking JS API changes:     1.0.1 → 2.0.0
+   ```
 
-```bash
-npm version patch -w reel-format -w reel-player --no-git-tag-version
-npm pkg set dependencies.reel-format=^1.0.2 -w reel-player && npm install
-git commit -am "Release 1.0.2" && git push
-awk '/^## /{p = $2 == "1.0.2"; next} p' CHANGELOG.md > notes.md   # this release's section
-gh release create v1.0.2 --title "reel-format 1.0.2, reel-player 1.0.2" --notes-file notes.md
-```
+   Add `--dry-run` to see what would happen without changing anything.
 
-Version 1.0.0 has no git tag. To add one: `git tag v1.0.0 557b31d && git push origin v1.0.0`.
-npm names 40b7139 as the source of all three 1.0.0 packages, but `reel-player` was published from the
-files of 557b31d, the commit that renamed it from `reel-dom`; 557b31d differs from 40b7139 only in that
-rename.
+The script ([`scripts/release.ts`](scripts/release.ts)) checks that `main` is clean and the same as on
+GitHub, gives all three packages the new version (and `reel-player` the matching `reel-format`
+range), dates the changelog section, builds, type-checks and tests, commits and pushes, and creates
+the GitHub release `vX.Y.Z`. That starts [`publish.yml`](.github/workflows/publish.yml), which
+publishes to npm with trusted publishing – no npm token is stored anywhere. The script waits until
+npm shows the new version and prints the links. If a step fails, nothing is released.
+
+Needs the GitHub CLI logged in (`gh auth login`). Version 1.0.0 has no git tag; to add one:
+`git tag v1.0.0 557b31d && git push origin v1.0.0`.
 
 ## Stability
 

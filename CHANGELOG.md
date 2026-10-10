@@ -4,6 +4,10 @@ What changed in each release of the packages in this repository. The packages fo
 [semantic versioning](https://semver.org); the `reel/1` format itself never changes (see
 [Stability](README.md#stability)).
 
+## Unreleased
+
+_Nothing yet._
+
 ## 1.0.1 – 2026-10-10
 
 `reel-format` 1.0.1, `reel-player` 1.0.1, `reel-schema` 1.0.1: bug fixes and documentation. The

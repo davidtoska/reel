@@ -14,7 +14,8 @@
     "typecheck": "npm run build -w reel-format && npm run typecheck -w reel-player && npm run typecheck -w reel-studio",
     "test": "npm test -w reel-format && npm test -w reel-player",
     "dev": "npm run dev -w reel-studio",
-    "start": "npm run start -w reel-studio"
+    "start": "npm run start -w reel-studio",
+    "release": "node scripts/release.ts"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
