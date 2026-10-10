@@ -1,5 +1,5 @@
 // reel-format – Reel 1.0 without the DOM: the format's types, validation, resolving and packages.
-// Runs in Node and in browsers. The player is in reel-dom; the JSON Schema is in reel-schema.
+// Runs in Node and in browsers. The player is in reel-player; the JSON Schema is in reel-schema.
 //
 //   import { validateReel, resolveReel, readReelPackage } from 'reel-format';
 //

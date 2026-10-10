@@ -88,15 +88,15 @@ comments) and [`packages/reel-schema`](packages/reel-schema) (JSON Schema, packa
 
 | Package | Runs in | What it is |
 | --- | --- | --- |
-| [`reel-dom`](packages/reel-dom) | Browsers, Electron | The player: `new ReelPlayer(element)`. |
+| [`reel-player`](packages/reel-player) | Browsers, Electron | The player: `new ReelPlayer(element)`. |
 | [`reel-format`](packages/reel-format) | Node and browsers | Types for `reel/1`, `validateReel`, `resolveReel`, reading and writing `.zip` packages. No DOM. |
 | [`reel-schema`](packages/reel-schema) | Anywhere | JSON Schema and package specification – for validators in Go, Python, Rust … |
 
-None of them has dependencies besides each other. In a browser app you install `reel-dom` and
+None of them has dependencies besides each other. In a browser app you install `reel-player` and
 `reel-format`. On a server, `reel-format` is enough.
 
 ```bash
-npm install reel-dom reel-format
+npm install reel-player reel-format
 ```
 
 ## Getting started: play a story in a page
@@ -109,7 +109,7 @@ the shapes differ. Give the element a size with CSS.
 <div id="screen" style="width: 100%; aspect-ratio: 16 / 9"></div>
 
 <script type="module">
-  import { ReelPlayer } from 'reel-dom';
+  import { ReelPlayer } from 'reel-player';
 
   const host = document.getElementById('screen');        // the element the story is drawn in
   const player = new ReelPlayer(host);
@@ -122,7 +122,7 @@ the shapes differ. Give the element a size with CSS.
 Or create the element in code, here filling the whole window:
 
 ```ts
-import { ReelPlayer } from 'reel-dom';
+import { ReelPlayer } from 'reel-player';
 
 const host = document.createElement('div');
 host.style.cssText = 'position: fixed; inset: 0';
@@ -142,7 +142,7 @@ button.onclick = () => player.enterFullscreen();
 player.destroy();                // when you are done: empties the element, removes all listeners
 ```
 
-The full API is in [`packages/reel-dom`](packages/reel-dom).
+The full API is in [`packages/reel-player`](packages/reel-player).
 
 ## Checking stories on a server
 
@@ -182,7 +182,7 @@ Requires Node 22.18+ or 23.6+ (the studio server runs TypeScript directly; Node 
 ## Repository
 
 ```
-packages/reel-dom      the player (browser)
+packages/reel-player      the player (browser)
 packages/reel-format   format, validation, packages (Node + browser)
 packages/reel-schema   JSON Schema + package specification
 examples/studio        example app: API, builder, templates, demo library

@@ -1,6 +1,6 @@
 # Reel Studio (example)
 
-An example application for making stories on screens, built on `reel-format` and `reel-dom`. It shows two ways to make reels:
+An example application for making stories on screens, built on `reel-format` and `reel-player`. It shows two ways to make reels:
 
 - **People** use the visual builder. They drag layers on the real player, set times, text,
   colours, audio and music, upload files or take them from the demo library, and save.
@@ -9,7 +9,7 @@ An example application for making stories on screens, built on `reel-format` and
 
 Every reel is stored as a **package** (`data/reels/<id>/reel.json` + `media/`) and published as it is
 at `/reels/<id>/reel.json`. It can be played at `/play.html?src=…`, played in any other page with
-`new ReelPlayer(element)` from `reel-dom`, downloaded as a `.zip`, and imported from a `.zip`.
+`new ReelPlayer(element)` from `reel-player`, downloaded as a `.zip`, and imported from a `.zip`.
 
 The studio is open demo software: no login, CORS open for everyone, and demo data that may be reset.
 Uploads are size-limited and served with a sandboxing CSP. All demo images and sounds are generated
@@ -62,7 +62,7 @@ Reel format.
 ```
 server/            node:http server: api.ts, store.ts (packages on disk), service.ts, templates/
 web/src            builder (editor.ts), gallery, player page – compiled to web/public/app
-web/public         HTML pages; an import map loads reel-format and reel-dom from /vendor/
+web/public         HTML pages; an import map loads reel-format and reel-player from /vendor/
 library/           generated demo media
 scripts/           the media generator
 ```

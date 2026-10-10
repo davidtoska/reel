@@ -1,6 +1,6 @@
-// reel-dom – the Reel player for browsers. Install it together with reel-format.
+// reel-player – the Reel player for browsers. Install it together with reel-format.
 //
-//   import { ReelPlayer } from 'reel-dom';
+//   import { ReelPlayer } from 'reel-player';
 //
 //   const player = new ReelPlayer(hostElement, { loop: true });   // an HTMLElement, not a selector
 //   await player.load('https://example.com/my-reel/reel.json');

@@ -4,7 +4,7 @@
 // layers that can be dragged and resized. Right: properties of the reel, the slide, the selected
 // layer, audio clips and media. Saving sends the document to the same API scripts and AI agents use.
 
-import { ReelPlayer } from 'reel-dom';
+import { ReelPlayer } from 'reel-player';
 import { slideStarts, validateReel, type AudioClip, type Layer, type Reel } from 'reel-format';
 import { api, ApiError, type LibraryFile, type MediaInfo } from './api.ts';
 import { fields, fmtBytes, fmtTime, h, toast } from './ui.ts';

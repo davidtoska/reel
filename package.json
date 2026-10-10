@@ -7,8 +7,8 @@
     "examples/*"
   ],
   "scripts": {
-    "build": "npm run build -w reel-format && npm run build -w reel-dom && npm run build -w reel-studio",
-    "typecheck": "npm run build -w reel-format && npm run typecheck -w reel-dom && npm run typecheck -w reel-studio",
+    "build": "npm run build -w reel-format && npm run build -w reel-player && npm run build -w reel-studio",
+    "typecheck": "npm run build -w reel-format && npm run typecheck -w reel-player && npm run typecheck -w reel-studio",
     "test": "npm test -w reel-format",
     "dev": "npm run dev -w reel-studio",
     "start": "npm run start -w reel-studio"

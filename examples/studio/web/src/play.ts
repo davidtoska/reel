@@ -3,7 +3,7 @@
 //
 // Keys: space play/pause · ← → previous/next slide · Home start · End end · F full screen.
 
-import { ReelLoadError, ReelPlayer } from 'reel-dom';
+import { ReelLoadError, ReelPlayer } from 'reel-player';
 import { h } from './ui.ts';
 
 const params = new URLSearchParams(location.search);

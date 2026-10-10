@@ -3,7 +3,7 @@
 Reel 1.0 for **Node and browsers**: TypeScript types for `reel/1` documents, validation, resolving,
 and reading/writing `.zip` reel packages. No DOM, no dependencies.
 
-The player is in [`reel-dom`](https://www.npmjs.com/package/reel-dom); the JSON Schema is in
+The player is in [`reel-player`](https://www.npmjs.com/package/reel-player); the JSON Schema is in
 [`reel-schema`](https://www.npmjs.com/package/reel-schema).
 
 ```bash

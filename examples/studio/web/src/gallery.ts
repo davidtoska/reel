@@ -80,7 +80,7 @@ document.getElementById('app')!.append(
       h('a', { href: 'https://www.npmjs.com/package/reel-format' }, 'npm'))),
   h('main', { class: 'page' },
     h('p', { class: 'lead' },
-      'An example app for ', h('code', {}, 'reel-format'), ' and ', h('code', {}, 'reel-dom'), '. People build reels here with the visual editor; scripts and AI agents use the same open ',
+      'An example app for ', h('code', {}, 'reel-format'), ' and ', h('code', {}, 'reel-player'), '. People build reels here with the visual editor; scripts and AI agents use the same open ',
       h('a', { href: '/api' }, 'API'), '. Every reel is a package (', h('code', {}, 'reel.json'), ' + ', h('code', {}, 'media/'),
       ') published at ', h('code', {}, '/reels/<id>/'), '. Everything here is open demo data and may be reset.'),
     h('section', {}, h('h2', {}, 'New reel'), templates),

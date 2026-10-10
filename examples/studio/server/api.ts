@@ -30,7 +30,7 @@ const unwrap = (body: unknown): { document: unknown; media?: MediaImport[]; id?:
 
 const describe = (req: IncomingMessage) => ({
   name: 'Reel Studio API',
-  about: 'Open demo API for creating reels (Reel 1.0, the "reel/1" format: npm packages reel-format, reel-dom and reel-schema). No login. Data may be reset at any time.',
+  about: 'Open demo API for creating reels (Reel 1.0, the "reel/1" format: npm packages reel-format, reel-player and reel-schema). No login. Data may be reset at any time.',
   workflow: [
     'Pick a format: write "reel/1" directly (full control), or a template (simpler, see GET /api/templates).',
     'Every reel is a package: reel.json plus files under media/. Files must be in the package before the document refers to them.',
@@ -39,7 +39,7 @@ const describe = (req: IncomingMessage) => ({
     'Update: PUT /api/reels/{id} with { document }. Invalid documents are rejected with a list of errors with paths; nothing is saved.',
     'Check without saving: POST /api/validate with { document }.',
     'Or upload a finished package: POST /api/reels/import with a .zip (reel.json + media/) as the body.',
-    'Publish: the reel is served at /reels/{id}/reel.json with its media next to it; play it at /play.html?src=…, play it in any page with new ReelPlayer(element).load("…/reel.json") from reel-dom, or download /api/reels/{id}/package.zip and host the folder anywhere.',
+    'Publish: the reel is served at /reels/{id}/reel.json with its media next to it; play it at /play.html?src=…, play it in any page with new ReelPlayer(element).load("…/reel.json") from reel-player, or download /api/reels/{id}/package.zip and host the folder anywhere.',
   ],
   formats: {
     [REEL_FORMAT]: { schema: `${origin(req)}/api/schema`, types: 'https://www.npmjs.com/package/reel-format (src/format.ts)', schemaPackage: 'https://www.npmjs.com/package/reel-schema' },

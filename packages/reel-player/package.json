@@ -1,5 +1,5 @@
 {
-  "name": "reel-dom",
+  "name": "reel-player",
   "version": "1.0.0",
   "description": "The Reel player for browsers: plays reel/1 documents on a letterboxed 16:9 canvas, as a function or as the <reel-player> custom element, full screen included. No dependencies besides reel-format.",
   "license": "MIT",
@@ -7,9 +7,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/davidtoska/reel.git",
-    "directory": "packages/reel-dom"
+    "directory": "packages/reel-player"
   },
-  "homepage": "https://github.com/davidtoska/reel/tree/main/packages/reel-dom#readme",
+  "homepage": "https://github.com/davidtoska/reel/tree/main/packages/reel-player#readme",
   "bugs": {
     "url": "https://github.com/davidtoska/reel/issues"
   },

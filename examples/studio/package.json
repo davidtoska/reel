@@ -6,7 +6,7 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
-    "reel-dom": "*",
+    "reel-player": "*",
     "reel-format": "*",
     "reel-schema": "*"
   },

@@ -1,18 +1,18 @@
-# reel-dom
+# reel-player
 
 The **Reel player** for browsers and Electron. It plays `reel/1` stories – pictures, drawings, text,
 narration and music over time – on a 16:9 canvas inside an element you give it.
 
 ```bash
-npm install reel-dom reel-format
+npm install reel-player reel-format
 ```
 
-`reel-dom` depends only on [`reel-format`](https://www.npmjs.com/package/reel-format).
+`reel-player` depends only on [`reel-format`](https://www.npmjs.com/package/reel-format).
 
 ## Quick start
 
 ```ts
-import { ReelPlayer } from 'reel-dom';
+import { ReelPlayer } from 'reel-player';
 
 const host = document.getElementById('screen')!;   // an HTMLElement – not a selector
 const player = new ReelPlayer(host);
@@ -150,7 +150,7 @@ player.on('statechange', state => { playButton.textContent = state === 'playing'
 ### Errors
 
 ```ts
-import { ReelLoadError, ReelPlayer } from 'reel-dom';
+import { ReelLoadError, ReelPlayer } from 'reel-player';
 
 try {
   await player.load(url);
@@ -187,13 +187,13 @@ const Story = ({ src }: { src: string }) => {
 
 ### Without a bundler
 
-`reel-dom` imports `reel-format` by name. Map both in an import map:
+`reel-player` imports `reel-format` by name. Map both in an import map:
 
 ```html
 <script type="importmap">
   { "imports": {
       "reel-format": "https://cdn.jsdelivr.net/npm/reel-format@1/dist/index.js",
-      "reel-dom": "https://cdn.jsdelivr.net/npm/reel-dom@1/dist/index.js" } }
+      "reel-player": "https://cdn.jsdelivr.net/npm/reel-player@1/dist/index.js" } }
 </script>
 ```
 
